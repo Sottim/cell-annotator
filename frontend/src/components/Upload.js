@@ -39,7 +39,7 @@ const Upload = ({ onSuccess }) => {
   return (
     <div>
       <input type="file" onChange={handleFileChange} />
-      <button onClick={handleUpload}>Upload</button>
+      <button className='upload-btn' onClick={handleUpload}>Upload</button>
     </div>
   );
 };

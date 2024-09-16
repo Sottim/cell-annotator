@@ -1,0 +1,62 @@
+/* Viewer.css - Ashoka University Theme */
+
+.viewer-container {
+  text-align: center;
+  padding: 20px;
+  background: linear-gradient(145deg, #FFF9F0, #F0ECE3); /* Milk-like gradient */
+  color: #000080; /* Navy Blue text for headings */
+  font-family: 'Arial', sans-serif;
+  width: 100%;
+  height: 100%;
+}
+
+.viewer-header h1 {
+  color: #B22222; /* Dark Red/Crimson color */
+  margin-bottom: 20px;
+}
+
+.viewer-box {
+  position: relative;
+  width: 70%; /* Fixed size for the viewer box */
+  height: 500px;
+  margin: 0 auto;
+  border: 2px solid #B22222; /* Dark red border */
+  border-radius: 10px;
+  overflow: hidden; /* Hide overflow to prevent scrolling outside the box */
+  background-color: #FFFFFF; /* White background inside the box */
+}
+
+.wsi-viewer {
+  width: 100%;
+  height: 100%;
+}
+
+.annotation-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.upload-section {
+  margin-top: 20px;
+}
+
+.upload-btn {
+  background-color: #B22222; /* Dark Red/Crimson */
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: background-color 0.3s ease;
+}
+
+.upload-btn:hover {
+  background-color: #800000; /* Darker red on hover */
+}
+
+input[type="file"] {
+  margin-right: 10px;
+}

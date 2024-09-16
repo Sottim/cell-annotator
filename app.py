@@ -3,9 +3,10 @@
 
 from flask import Flask, request, jsonify, send_from_directory, render_template_string
 from flask_cors import CORS
+import os
+os.add_dll_directory(r"C:\Program Files (x86)\OpenSlide\bin")  # Replace with the directory containing libopenslide-1.dll
 import openslide
 from openslide.deepzoom import DeepZoomGenerator
-import os
 import json
 
 app = Flask(__name__)

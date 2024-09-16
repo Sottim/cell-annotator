@@ -48,3 +48,21 @@
     transform: rotate(360deg);
   }
 }
+
+html
+{
+  background: linear-gradient(145deg, #FFF9F0, #F0ECE3); /* Milk-like gradient */
+}
+
+.app-container
+{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-title
+{
+  color: #B22222; /* Dark Red/Crimson color */
+}

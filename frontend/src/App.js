@@ -1,8 +1,7 @@
-// Ensure that the Viewer component is correctly used in the App.js file.
-
 import React, { useState } from 'react';
 import Upload from './components/Upload';
 import Viewer from './components/Viewer';
+import './App.css'; // Importing App CSS
 
 const App = () => {
   const [dziUrl, setDziUrl] = useState('');
@@ -15,10 +14,11 @@ const App = () => {
   };
 
   return (
-    <div>
-      <h1>Cell Annotator</h1>
+    <div className='app-container'>
+      <h1 className="page-title">Upload WSI</h1>
       <Upload onSuccess={handleUploadSuccess} />
       {dziUrl && <Viewer dziUrl={dziUrl} filename={filename} />}
+      {!dziUrl && <Viewer dziUrl={""} filename={filename} />}
     </div>
   );
 };
