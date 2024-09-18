@@ -252,6 +252,7 @@ const Viewer = ({ dziUrl, filename }) => {
             </label>
           </div>
         ))}
+        {!annotationTypes.length>0 && <>Please Upload Annotations!</>}
         
       </div>
 
