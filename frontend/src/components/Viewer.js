@@ -194,11 +194,37 @@ const Viewer = ({ dziUrl, filename }) => {
         <h1>Whole Slide Image Viewer</h1>
       </div>
       <div className="viewer-wrapper">
-        <div className="viewer-box">
-          <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer"></div>
-          <canvas ref={canvasRef} className="annotation-canvas" />
-        </div>
-      </div>
+  <div className="viewer-box">
+    <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer"></div>
+    <canvas ref={canvasRef} className="annotation-canvas" />
+    
+    {/* Legend Box */}
+    <div className="annotation-legend">
+      <ul>
+        {annotationTypes.map((type) => {
+          const color = annotations.find((feature) => feature.properties.classification.name === type)?.properties.classification.color;
+          if (!color) return null;
+
+          return (
+            <li key={type} style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: '15px',
+                  height: '15px',
+                  backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
+                  marginRight: '10px',
+                }}
+              ></span>
+              {type}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  </div>
+</div>
+
 
       <div className="zoom-slider-container">
         <input
@@ -226,6 +252,7 @@ const Viewer = ({ dziUrl, filename }) => {
             </label>
           </div>
         ))}
+        
       </div>
 
       <div className="upload-section">
