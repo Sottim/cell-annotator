@@ -13,56 +13,58 @@ const Viewer = ({ dziUrl, filename }) => {
   const [annotationTypes, setAnnotationTypes] = useState([]);
   const [zoomValue, setZoomValue] = useState(0); // State to control zoom slider
 
+  // Drawing annotations
   const drawAnnotationsOnCanvas = () => {
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
+  
+    // Clear the canvas before drawing
     context.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (!viewer || !viewer.world) {
-      console.error('Viewer or world object is not ready.');
-      return;
-    }
-
+  
+    if (!viewer || !viewer.world) return;
+  
     annotations.forEach((feature) => {
       const { classification } = feature.properties;
       const { geometry } = feature;
-
-      // Check if geometry and coordinates exist
-      if (!geometry || !geometry.coordinates) {
-        console.warn(`Geometry or coordinates missing for feature: ${feature.id}`);
-        return;
-      }
-
-      const { coordinates } = geometry;
-
-      // Check if this annotation type is currently visible
-      if (!visibleAnnotations[classification.name]) {
-        return;
-      }
-
-      // Set the annotation color using the classification's color
+  
+      if (!geometry || !geometry.coordinates) return;
+      if (!visibleAnnotations[classification.name]) return; // Only draw visible annotations
+  
       context.fillStyle = `rgb(${classification.color[0]}, ${classification.color[1]}, ${classification.color[2]})`;
-
-      // Iterate over coordinates and draw them
-      coordinates.forEach((point) => {
+  
+      geometry.coordinates.forEach((point) => {
         const [x, y] = point;
+  
+        // Convert image coordinates to viewport coordinates
         const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
         const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
-
+  
+        // Draw annotation on the canvas at the correct position
         context.beginPath();
         context.arc(screenPoint.x, screenPoint.y, 2, 0, 2 * Math.PI, false);
         context.fill();
       });
     });
   };
+  
+  
+  
+  
 
+  // Update the canvas size to match the viewer container
   const updateCanvasSize = () => {
     const canvas = canvasRef.current;
-    canvas.width = viewerRef.current.clientWidth;
-    canvas.height = viewerRef.current.clientHeight;
-    drawAnnotationsOnCanvas();
+    if (viewerRef.current && canvas) {
+      // Set the canvas to match the viewer's size
+      canvas.width = viewerRef.current.clientWidth;
+      canvas.height = viewerRef.current.clientHeight;
+      drawAnnotationsOnCanvas(); // Redraw the annotations after resizing
+    }
   };
+  
+  
 
+  // Load and display annotations
   const loadAndDisplayAnnotations = async (annotationFilename) => {
     try {
       const response = await axios.get(`http://localhost:5000/annotations/${annotationFilename}`);
@@ -71,31 +73,26 @@ const Viewer = ({ dziUrl, filename }) => {
       setAnnotations(features);
       const uniqueTypes = [...new Set(features.map((feature) => feature.properties.classification.name))];
 
-      setAnnotationTypes(uniqueTypes); // Store unique annotation types
-      setVisibleAnnotations(uniqueTypes.reduce((acc, type) => ({ ...acc, [type]: true }), {})); // Set all types as visible initially
-      drawAnnotationsOnCanvas();
+      setAnnotationTypes(uniqueTypes);
+      setVisibleAnnotations(uniqueTypes.reduce((acc, type) => ({ ...acc, [type]: true }), {}));
 
       if (viewer) {
-        viewer.removeHandler('animation', updateCanvasSize);
-        viewer.removeHandler('pan', updateCanvasSize);
-        viewer.removeHandler('zoom', updateCanvasSize);
-
-        viewer.addHandler('animation', updateCanvasSize);
-        viewer.addHandler('pan', updateCanvasSize);
-        viewer.addHandler('zoom', updateCanvasSize);
+        updateCanvasSize(); // Ensure that annotations are drawn when loaded
       }
     } catch (error) {
       console.error('Error loading annotations:', error);
     }
   };
 
+  // Toggle annotation visibility
   const handleToggleAnnotation = (type) => {
     setVisibleAnnotations((prevState) => ({
       ...prevState,
-      [type]: !prevState[type], // Toggle visibility
+      [type]: !prevState[type],
     }));
   };
 
+  // Initialize OpenSeadragon viewer
   useEffect(() => {
     if (viewerRef.current && !viewer) {
       const newViewer = OpenSeadragon({
@@ -111,16 +108,51 @@ const Viewer = ({ dziUrl, filename }) => {
       });
 
       newViewer.addHandler('zoom', () => {
-        setZoomValue(newViewer.viewport.getZoom()); // Update slider when zoom changes
+        setZoomValue(newViewer.viewport.getZoom());
       });
+
+      newViewer.addHandler('pan', updateCanvasSize);
+      newViewer.addHandler('zoom', updateCanvasSize);
+      newViewer.addHandler('animation', updateCanvasSize);
+
+      return () => {
+        newViewer.removeHandler('pan', updateCanvasSize);
+        newViewer.removeHandler('zoom', updateCanvasSize);
+        newViewer.removeHandler('animation', updateCanvasSize);
+      };
     }
   }, [dziUrl, viewer]);
 
+
+  useEffect(() => {
+    if (viewer) {
+      // Redraw annotations whenever zoom or pan occurs
+      const handlePanZoom = () => {
+        drawAnnotationsOnCanvas(); // Redraw annotations after pan/zoom
+      };
+  
+      // Attach event handlers
+      viewer.addHandler('zoom', handlePanZoom);
+      viewer.addHandler('pan', handlePanZoom);
+      viewer.addHandler('animation', handlePanZoom);
+  
+      // Cleanup event handlers on component unmount
+      return () => {
+        viewer.removeHandler('zoom', handlePanZoom);
+        viewer.removeHandler('pan', handlePanZoom);
+        viewer.removeHandler('animation', handlePanZoom);
+      };
+    }
+  }, [viewer, annotations, visibleAnnotations]);
+  
+  
+  
+  // Redraw annotations when visibility changes
   useEffect(() => {
     if (annotations.length > 0) {
-      drawAnnotationsOnCanvas(); // Redraw annotations when visibility changes
+      drawAnnotationsOnCanvas();
     }
-  }, [visibleAnnotations]);
+  }, [visibleAnnotations, annotations, zoomValue]);
 
   const handleZoomChange = (event) => {
     const zoomLevel = parseFloat(event.target.value);
@@ -138,20 +170,23 @@ const Viewer = ({ dziUrl, filename }) => {
       alert('Please select an annotation file first!');
       return;
     }
-
+  
     const formData = new FormData();
     formData.append('file', annotationFile);
-
+  
     try {
       await axios.post('http://localhost:5000/upload_annotations', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-
-      loadAndDisplayAnnotations(annotationFile.name);
+  
+      await loadAndDisplayAnnotations(annotationFile.name);
+      updateCanvasSize(); // Ensure canvas and annotations are redrawn after upload
     } catch (error) {
       console.error('Error uploading annotation file:', error);
     }
   };
+  
+  
 
   return (
     <div className="viewer-container">
@@ -166,18 +201,18 @@ const Viewer = ({ dziUrl, filename }) => {
       </div>
 
       <div className="zoom-slider-container">
-          <input
-            id="zoomSlider"
-            className="zoom-slider"
-            type="range"
-            min={viewer ? viewer.viewport.getMinZoom() : 0.1}
-            max={viewer ? viewer.viewport.getMaxZoom() : 2}
-            step={0.01}
-            value={zoomValue}
-            onChange={handleZoomChange}
-          />
-        </div>
-        <div className="annotation-toggles">
+        <input
+          id="zoomSlider"
+          className="zoom-slider"
+          type="range"
+          min={viewer ? viewer.viewport.getMinZoom() : 0.1}
+          max={viewer ? viewer.viewport.getMaxZoom() : 2}
+          step={0.01}
+          value={zoomValue}
+          onChange={handleZoomChange}
+        />
+      </div>
+      <div className="annotation-toggles">
         <h3>Toggle Annotations</h3>
         {annotationTypes.map((type) => (
           <div key={type}>
@@ -192,7 +227,6 @@ const Viewer = ({ dziUrl, filename }) => {
           </div>
         ))}
       </div>
-      
 
       <div className="upload-section">
         <input type="file" onChange={handleAnnotationFileChange} accept=".json,.geojson" />
@@ -200,8 +234,6 @@ const Viewer = ({ dziUrl, filename }) => {
           Upload Annotations
         </button>
       </div>
-
-
     </div>
   );
 };
