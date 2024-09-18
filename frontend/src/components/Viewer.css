@@ -1,5 +1,3 @@
-/* Viewer.css - Ashoka University Theme */
-
 .viewer-container {
   text-align: center;
   padding: 20px;
@@ -8,6 +6,10 @@
   font-family: 'Arial', sans-serif;
   width: 100%;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .viewer-header h1 {
@@ -16,17 +18,17 @@
 }
 
 .viewer-wrapper {
-  display: flex; /* Use flexbox for horizontal alignment */
-  justify-content: center;
+  display: flex;
+  flex-direction: column; /* Stack the items vertically */
   align-items: center;
   width: 100%;
 }
 
 .viewer-box {
   position: relative;
-  width: 70%; /* Fixed size for the viewer box */
+  width: 60%; /* Fixed size for the viewer box */
   height: 500px;
-  margin: 0;
+  margin: 0 auto; /* Center the box */
   border: 2px solid #B22222; /* Dark red border */
   border-radius: 10px;
   overflow: hidden; /* Hide overflow to prevent scrolling outside the box */
@@ -68,18 +70,18 @@ input[type="file"] {
   margin-right: 10px;
 }
 
+/* Horizontal Zoom Slider */
 .zoom-slider-container {
-  height: 500px; /* Same height as viewer box */
-  margin-left: 20px; /* Adds space between viewer box and slider */
+  margin-top: 20px;
+  width: 60%; /* Matches viewer box width */
   display: flex;
+  justify-content: center;
   align-items: center;
 }
 
 .zoom-slider {
-  writing-mode: bt-lr; /* Vertical slider */
-  -webkit-appearance: slider-vertical;
-  width: 25px;
-  height: 100%;
+  width: 100%; /* Horizontal width */
+  height: 25px; /* Adjusted height for horizontal slider */
   background-color: #FFF9F0; /* Matches background gradient */
   border-radius: 10px;
   border: 2px solid #B22222; /* Matches viewer border */
@@ -106,4 +108,19 @@ input[type="file"] {
 .zoom-slider:hover::-webkit-slider-thumb,
 .zoom-slider:hover::-moz-range-thumb {
   background-color: #800000; /* Darker red on hover */
+}
+
+.annotation-toggles {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px; /* Add margin to separate it from the viewer box */
+  margin-bottom: 20px;
+  border: 2px solid #B22222; /* Dark red border */
+  border-radius: 10px;
+  padding: 12px;
+  padding-bottom: 24px;
+  width: 15%;
 }
