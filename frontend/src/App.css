@@ -52,6 +52,7 @@
 html
 {
   background: linear-gradient(145deg, #FFF9F0, #F0ECE3); /* Milk-like gradient */
+  overflow: hidden;
 }
 
 .app-container

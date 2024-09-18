@@ -15,11 +15,18 @@
   margin-bottom: 20px;
 }
 
+.viewer-wrapper {
+  display: flex; /* Use flexbox for horizontal alignment */
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
 .viewer-box {
   position: relative;
   width: 70%; /* Fixed size for the viewer box */
   height: 500px;
-  margin: 0 auto;
+  margin: ;
   border: 2px solid #B22222; /* Dark red border */
   border-radius: 10px;
   overflow: hidden; /* Hide overflow to prevent scrolling outside the box */
@@ -59,4 +66,44 @@
 
 input[type="file"] {
   margin-right: 10px;
+}
+
+.zoom-slider-container {
+  height: 500px; /* Same height as viewer box */
+  margin-left: 20px; /* Adds space between viewer box and slider */
+  display: flex;
+  align-items: center;
+}
+
+.zoom-slider {
+  writing-mode: bt-lr; /* Vertical slider */
+  -webkit-appearance: slider-vertical;
+  width: 25px;
+  height: 100%;
+  background-color: #FFF9F0; /* Matches background gradient */
+  border-radius: 10px;
+  border: 2px solid #B22222; /* Matches viewer border */
+  cursor: pointer;
+}
+
+.zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  background-color: #B22222; /* Crimson slider thumb */
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.zoom-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background-color: #B22222;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.zoom-slider:hover::-webkit-slider-thumb,
+.zoom-slider:hover::-moz-range-thumb {
+  background-color: #800000; /* Darker red on hover */
 }
