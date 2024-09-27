@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import OpenSeadragon from 'openseadragon';
 import axios from 'axios';
@@ -37,16 +36,51 @@ const Viewer = ({ dziUrl, filename }) => {
       app.stage.addChild(annotationGraphicsRef.current);
     }).catch(err => console.error("PixiJS Initialization error: ", err));
   };
+
+  // Add blur to the viewer
+  const addBlur = () => {
+    const viewerElement = document.getElementById('openseadragon-viewer');
+    viewerElement.classList.add('blur');
+  };
+
+  // Remove blur from the viewer
+  const removeBlur = () => {
+    const viewerElement = document.getElementById('openseadragon-viewer');
+    viewerElement.classList.remove('blur');
+  };
+
+  // Show loading spinner
+  const showLoadingSpinner = () => {
+    const spinner = document.getElementById('loadingSpinner');
+    spinner.style.display = 'block';
+  };
+
+  // Hide loading spinner
+  const hideLoadingSpinner = () => {
+    const spinner = document.getElementById('loadingSpinner');
+    spinner.style.display = 'none';
+  };
+
+  const handlePanZoomStart = () => {
+    console.log('Pan/Zoom started');
+    addBlur();
+    showLoadingSpinner();
+  };
   
-   
+  const handlePanZoomEnd = () => {
+    console.log('Pan/Zoom finished');
+    removeBlur();
+    hideLoadingSpinner();
+    drawAnnotationsWithPixi();  // Re-draw annotations after zoom/pan ends
+  };
   
   const drawAnnotationsWithPixi = () => {
     if (!viewer || !viewer.world || !pixiAppRef.current || !annotationGraphicsRef.current) return;
   
     const graphics = annotationGraphicsRef.current;
-    graphics.clear();  // Clear previous drawings
+    graphics.clear(); // Clear previous drawings
   
-    const zoom = viewer.viewport.getZoom(true);  // Get the current zoom level
+    const zoom = viewer.viewport.getZoom(true); // Get the current zoom level
     const viewerSize = viewer.viewport.getContainerSize(); // Get viewer size for transformations
   
     annotations.forEach((feature) => {
@@ -58,7 +92,8 @@ const Viewer = ({ dziUrl, filename }) => {
   
       const rgbToHex = (r, g, b) => (r << 16) + (g << 8) + b;
       const hexColor = rgbToHex(classification.color[0], classification.color[1], classification.color[2]);
-      graphics.beginFill(hexColor); // Set fill color
+  
+      graphics.fill({ color: hexColor }); // Use the new fill method
   
       if (geometry.type === 'MultiPolygon' || geometry.type === 'Polygon') {
         geometry.coordinates.forEach((polygon) => {
@@ -80,7 +115,7 @@ const Viewer = ({ dziUrl, filename }) => {
               }
             });
             graphics.closePath();
-            graphics.fill();  // Fill the polygon
+            graphics.fill(); // Fill the polygon
           });
         });
       }
@@ -95,9 +130,8 @@ const Viewer = ({ dziUrl, filename }) => {
           const adjustedY = screenPoint.y;
   
           // Draw a small circle or point to represent the point annotation
-          graphics.beginFill(hexColor);
-          graphics.drawCircle(adjustedX, adjustedY, 2);  // Adjust the radius for visibility
-          graphics.endFill();
+          graphics.fill({ color: hexColor });
+          graphics.drawCircle(adjustedX, adjustedY, 2); // Adjust the radius for visibility
         });
       }
     });
@@ -105,10 +139,6 @@ const Viewer = ({ dziUrl, filename }) => {
     // Ensure rendering
     pixiAppRef.current.renderer.render(pixiAppRef.current.stage);
   };
-  
-  
-  
-  
   
   // Update the canvas size when the viewer resizes
   const updatePixiAppSize = () => {
@@ -118,6 +148,21 @@ const Viewer = ({ dziUrl, filename }) => {
       drawAnnotationsWithPixi();
     }
   };
+
+  useEffect(() => {
+    if (viewer) {
+      const updateZoomValue = () => {
+        setZoomValue(viewer.viewport.getZoom());
+      };
+  
+      viewer.addHandler('zoom', updateZoomValue);
+  
+      return () => {
+        viewer.removeHandler('zoom', updateZoomValue);
+      };
+    }
+  }, [viewer]);
+  
 
   // Load and display annotations
   const loadAndDisplayAnnotations = async (annotationFilename) => {
@@ -146,8 +191,6 @@ const Viewer = ({ dziUrl, filename }) => {
       [type]: !prevState[type],
     }));
   };
-
-  // Initialize OpenSeadragon viewer and Pixi app
   useEffect(() => {
     if (viewerRef.current && !viewer) {
       const newViewer = OpenSeadragon({
@@ -160,25 +203,24 @@ const Viewer = ({ dziUrl, filename }) => {
         setViewer(newViewer);
         setZoomValue(newViewer.viewport.getZoom()); // Initialize slider with current zoom
         initializePixiApp();
-        updatePixiAppSize();
       });
+      newViewer.addHandler('zoom', handlePanZoomStart);  // Trigger blur and spinner when zoom starts
+      newViewer.addHandler('pan', handlePanZoomStart);  // Trigger blur and spinner when pan starts
+      
+      newViewer.addHandler('animation-finish', handlePanZoomEnd);  // Remove blur and spinner after the animation ends
+      
 
-      newViewer.addHandler('zoom', () => {
-        setZoomValue(newViewer.viewport.getZoom());
-        drawAnnotationsWithPixi();
-      });
-
-      newViewer.addHandler('pan', drawAnnotationsWithPixi);
-      newViewer.addHandler('zoom', drawAnnotationsWithPixi);
-      newViewer.addHandler('animation', drawAnnotationsWithPixi);
 
       return () => {
-        newViewer.removeHandler('pan', drawAnnotationsWithPixi);
-        newViewer.removeHandler('zoom', drawAnnotationsWithPixi);
-        newViewer.removeHandler('animation', drawAnnotationsWithPixi);
+        return () => {
+          newViewer.removeHandler('zoom', handlePanZoomStart);
+          newViewer.removeHandler('pan', handlePanZoomStart);
+          newViewer.removeHandler('animation-finish', handlePanZoomEnd);
+        };
+        
       };
     }
-  }, [dziUrl, viewer, drawAnnotationsWithPixi, updatePixiAppSize]); // Include necessary dependencies
+  }, [dziUrl, viewer, drawAnnotationsWithPixi]);
 
   useEffect(() => {
     if (annotations.length > 0) {
@@ -253,7 +295,7 @@ useEffect(() => {
       <div className="viewer-wrapper">
         <div className="viewer-box">
           <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer"></div>
-          
+          <div className="loading-spinner" id="loadingSpinner"></div>
           {/* Legend Box */}
           <div className="annotation-legend">
             <ul>
