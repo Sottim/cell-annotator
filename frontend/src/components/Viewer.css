@@ -12,6 +12,8 @@
   align-items: center;
 }
 
+
+
 .viewer-header h1 {
   color: #B22222; /* Dark Red/Crimson color */
   margin-bottom: 20px;
@@ -40,6 +42,21 @@
   height: 100%;
 }
 
+.wsi-viewer canvas {
+  z-index: 10; /* Increase this to ensure it appears above other layers */
+}
+
+.wsi-viewer canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1000;  /* Ensure it's on top */
+  pointer-events: none;  /* Make sure it doesn't block interactions */
+  background: transparent;
+}
+
+
+
 .annotation-legend {
   position: absolute;
   top: 10px;
@@ -49,6 +66,7 @@
   border-radius: 5px;
   box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1); /* Subtle shadow for better visibility */
   font-size: 12px; /* Adjust font size */
+  z-index: 1001;
 }
 
 .annotation-legend ul {

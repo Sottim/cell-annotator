@@ -1,27 +1,53 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import OpenSeadragon from 'openseadragon';
 import axios from 'axios';
+import * as PIXI from 'pixi.js';
+import { Application } from 'pixi.js';
 import './Viewer.css'; // Import the stylesheet
 
 const Viewer = ({ dziUrl, filename }) => {
   const viewerRef = useRef(null);
-  const canvasRef = useRef(null);
   const [viewer, setViewer] = useState(null);
-  const [annotationFile, setAnnotationFile] = useState(null);
   const [annotations, setAnnotations] = useState([]);
   const [visibleAnnotations, setVisibleAnnotations] = useState({});
   const [annotationTypes, setAnnotationTypes] = useState([]);
   const [zoomValue, setZoomValue] = useState(0); // State to control zoom slider
 
-  // Drawing annotations
-  const drawAnnotationsOnCanvas = () => {
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
+  const pixiAppRef = useRef(null);
+  const annotationGraphicsRef = useRef(null);
+  const [annotationFile, setAnnotationFile] = useState(null); // Define annotation file state
+
+  const initializePixiApp = () => {
+    const canvas = document.createElement('canvas');
+    const view = canvas.transferControlToOffscreen();
   
-    // Clear the canvas before drawing
-    context.clearRect(0, 0, canvas.width, canvas.height);
+    const app = new Application();
   
-    if (!viewer || !viewer.world) return;
+    app.init({
+      view,
+      backgroundAlpha: 0,  // Ensure the canvas is fully transparent
+      resizeTo: viewerRef.current,  // Ensure the canvas resizes with the viewer
+    }).then(() => {
+      viewerRef.current.appendChild(canvas);  // Append the OffscreenCanvas to the viewer
+      pixiAppRef.current = app;
+  
+      // Create the graphics container for annotations
+      annotationGraphicsRef.current = new PIXI.Graphics();
+      app.stage.addChild(annotationGraphicsRef.current);
+    }).catch(err => console.error("PixiJS Initialization error: ", err));
+  };
+  
+   
+  
+  const drawAnnotationsWithPixi = () => {
+    if (!viewer || !viewer.world || !pixiAppRef.current || !annotationGraphicsRef.current) return;
+  
+    const graphics = annotationGraphicsRef.current;
+    graphics.clear();  // Clear previous drawings
+  
+    const zoom = viewer.viewport.getZoom(true);  // Get the current zoom level
+    const viewerSize = viewer.viewport.getContainerSize(); // Get viewer size for transformations
   
     annotations.forEach((feature) => {
       const { classification } = feature.properties;
@@ -30,39 +56,68 @@ const Viewer = ({ dziUrl, filename }) => {
       if (!geometry || !geometry.coordinates) return;
       if (!visibleAnnotations[classification.name]) return; // Only draw visible annotations
   
-      context.fillStyle = `rgb(${classification.color[0]}, ${classification.color[1]}, ${classification.color[2]})`;
+      const rgbToHex = (r, g, b) => (r << 16) + (g << 8) + b;
+      const hexColor = rgbToHex(classification.color[0], classification.color[1], classification.color[2]);
+      graphics.beginFill(hexColor); // Set fill color
   
-      geometry.coordinates.forEach((point) => {
-        const [x, y] = point;
+      if (geometry.type === 'MultiPolygon' || geometry.type === 'Polygon') {
+        geometry.coordinates.forEach((polygon) => {
+          polygon.forEach((ring) => {
+            ring.forEach(([x, y], index) => {
+              // Convert image coordinates to viewport coordinates
+              const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
   
-        // Convert image coordinates to viewport coordinates
-        const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
-        const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
+              // Convert viewport coordinates to viewer element coordinates (screen coordinates)
+              const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
   
-        // Draw annotation on the canvas at the correct position
-        context.beginPath();
-        context.arc(screenPoint.x, screenPoint.y, 2, 0, 2 * Math.PI, false);
-        context.fill();
-      });
+              const adjustedX = screenPoint.x;
+              const adjustedY = screenPoint.y;
+  
+              if (index === 0) {
+                graphics.moveTo(adjustedX, adjustedY);
+              } else {
+                graphics.lineTo(adjustedX, adjustedY);
+              }
+            });
+            graphics.closePath();
+            graphics.fill();  // Fill the polygon
+          });
+        });
+      }
+  
+      // Handle MultiPoint
+      if (geometry.type === 'MultiPoint' || geometry.type === 'Point') {
+        geometry.coordinates.forEach(([x, y]) => {
+          const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
+          const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
+  
+          const adjustedX = screenPoint.x;
+          const adjustedY = screenPoint.y;
+  
+          // Draw a small circle or point to represent the point annotation
+          graphics.beginFill(hexColor);
+          graphics.drawCircle(adjustedX, adjustedY, 2);  // Adjust the radius for visibility
+          graphics.endFill();
+        });
+      }
     });
+  
+    // Ensure rendering
+    pixiAppRef.current.renderer.render(pixiAppRef.current.stage);
   };
   
   
   
   
-
-  // Update the canvas size to match the viewer container
-  const updateCanvasSize = () => {
-    const canvas = canvasRef.current;
-    if (viewerRef.current && canvas) {
-      // Set the canvas to match the viewer's size
-      canvas.width = viewerRef.current.clientWidth;
-      canvas.height = viewerRef.current.clientHeight;
-      drawAnnotationsOnCanvas(); // Redraw the annotations after resizing
+  
+  // Update the canvas size when the viewer resizes
+  const updatePixiAppSize = () => {
+    if (pixiAppRef.current && viewerRef.current) {
+      const app = pixiAppRef.current;
+      app.renderer.resize(viewerRef.current.clientWidth, viewerRef.current.clientHeight);
+      drawAnnotationsWithPixi();
     }
   };
-  
-  
 
   // Load and display annotations
   const loadAndDisplayAnnotations = async (annotationFilename) => {
@@ -77,7 +132,7 @@ const Viewer = ({ dziUrl, filename }) => {
       setVisibleAnnotations(uniqueTypes.reduce((acc, type) => ({ ...acc, [type]: true }), {}));
 
       if (viewer) {
-        updateCanvasSize(); // Ensure that annotations are drawn when loaded
+        updatePixiAppSize(); // Ensure that annotations are drawn when loaded
       }
     } catch (error) {
       console.error('Error loading annotations:', error);
@@ -92,7 +147,7 @@ const Viewer = ({ dziUrl, filename }) => {
     }));
   };
 
-  // Initialize OpenSeadragon viewer
+  // Initialize OpenSeadragon viewer and Pixi app
   useEffect(() => {
     if (viewerRef.current && !viewer) {
       const newViewer = OpenSeadragon({
@@ -103,54 +158,31 @@ const Viewer = ({ dziUrl, filename }) => {
 
       newViewer.addHandler('open', () => {
         setViewer(newViewer);
-        updateCanvasSize();
         setZoomValue(newViewer.viewport.getZoom()); // Initialize slider with current zoom
+        initializePixiApp();
+        updatePixiAppSize();
       });
 
       newViewer.addHandler('zoom', () => {
         setZoomValue(newViewer.viewport.getZoom());
+        drawAnnotationsWithPixi();
       });
 
-      newViewer.addHandler('pan', updateCanvasSize);
-      newViewer.addHandler('zoom', updateCanvasSize);
-      newViewer.addHandler('animation', updateCanvasSize);
+      newViewer.addHandler('pan', drawAnnotationsWithPixi);
+      newViewer.addHandler('zoom', drawAnnotationsWithPixi);
+      newViewer.addHandler('animation', drawAnnotationsWithPixi);
 
       return () => {
-        newViewer.removeHandler('pan', updateCanvasSize);
-        newViewer.removeHandler('zoom', updateCanvasSize);
-        newViewer.removeHandler('animation', updateCanvasSize);
+        newViewer.removeHandler('pan', drawAnnotationsWithPixi);
+        newViewer.removeHandler('zoom', drawAnnotationsWithPixi);
+        newViewer.removeHandler('animation', drawAnnotationsWithPixi);
       };
     }
-  }, [dziUrl, viewer]);
+  }, [dziUrl, viewer, drawAnnotationsWithPixi, updatePixiAppSize]); // Include necessary dependencies
 
-
-  useEffect(() => {
-    if (viewer) {
-      // Redraw annotations whenever zoom or pan occurs
-      const handlePanZoom = () => {
-        drawAnnotationsOnCanvas(); // Redraw annotations after pan/zoom
-      };
-  
-      // Attach event handlers
-      viewer.addHandler('zoom', handlePanZoom);
-      viewer.addHandler('pan', handlePanZoom);
-      viewer.addHandler('animation', handlePanZoom);
-  
-      // Cleanup event handlers on component unmount
-      return () => {
-        viewer.removeHandler('zoom', handlePanZoom);
-        viewer.removeHandler('pan', handlePanZoom);
-        viewer.removeHandler('animation', handlePanZoom);
-      };
-    }
-  }, [viewer, annotations, visibleAnnotations]);
-  
-  
-  
-  // Redraw annotations when visibility changes
   useEffect(() => {
     if (annotations.length > 0) {
-      drawAnnotationsOnCanvas();
+      drawAnnotationsWithPixi();
     }
   }, [visibleAnnotations, annotations, zoomValue]);
 
@@ -160,6 +192,33 @@ const Viewer = ({ dziUrl, filename }) => {
       viewer.viewport.zoomTo(zoomLevel);
     }
   };
+  let animationFrameId = null;
+
+const handlePanZoom = () => {
+  if (animationFrameId) {
+    // cancelAnimationFrame(animationFrameId);
+  }
+  animationFrameId = requestAnimationFrame(() => {
+    drawAnnotationsWithPixi();
+    animationFrameId = null;
+  });
+};
+
+// Attach pan and zoom event handlers to the viewer
+useEffect(() => {
+  if (viewer) {
+    viewer.addHandler('pan', handlePanZoom);
+    viewer.addHandler('zoom', handlePanZoom);
+    viewer.addHandler('animation', handlePanZoom);
+
+    return () => {
+      viewer.removeHandler('pan', handlePanZoom);
+      viewer.removeHandler('zoom', handlePanZoom);
+      viewer.removeHandler('animation', handlePanZoom);
+    };
+  }
+}, [viewer, annotations, visibleAnnotations]);
+
 
   const handleAnnotationFileChange = (event) => {
     setAnnotationFile(event.target.files[0]);
@@ -170,23 +229,21 @@ const Viewer = ({ dziUrl, filename }) => {
       alert('Please select an annotation file first!');
       return;
     }
-  
+
     const formData = new FormData();
     formData.append('file', annotationFile);
-  
+
     try {
       await axios.post('http://localhost:5000/upload_annotations', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-  
+
       await loadAndDisplayAnnotations(annotationFile.name);
-      updateCanvasSize(); // Ensure canvas and annotations are redrawn after upload
+      updatePixiAppSize(); // Ensure canvas and annotations are redrawn after upload
     } catch (error) {
       console.error('Error uploading annotation file:', error);
     }
   };
-  
-  
 
   return (
     <div className="viewer-container">
@@ -194,37 +251,35 @@ const Viewer = ({ dziUrl, filename }) => {
         <h1>Whole Slide Image Viewer</h1>
       </div>
       <div className="viewer-wrapper">
-  <div className="viewer-box">
-    <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer"></div>
-    <canvas ref={canvasRef} className="annotation-canvas" />
-    
-    {/* Legend Box */}
-    <div className="annotation-legend">
-      <ul>
-        {annotationTypes.map((type) => {
-          const color = annotations.find((feature) => feature.properties.classification.name === type)?.properties.classification.color;
-          if (!color) return null;
+        <div className="viewer-box">
+          <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer"></div>
+          
+          {/* Legend Box */}
+          <div className="annotation-legend">
+            <ul>
+              {annotationTypes.map((type) => {
+                const color = annotations.find((feature) => feature.properties.classification.name === type)?.properties.classification.color;
+                if (!color) return null;
 
-          return (
-            <li key={type} style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: '15px',
-                  height: '15px',
-                  backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
-                  marginRight: '10px',
-                }}
-              ></span>
-              {type}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  </div>
-</div>
-
+                return (
+                  <li key={type} style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: '15px',
+                        height: '15px',
+                        backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
+                        marginRight: '10px',
+                      }}
+                    ></span>
+                    {type}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      </div>
 
       <div className="zoom-slider-container">
         <input
@@ -238,6 +293,7 @@ const Viewer = ({ dziUrl, filename }) => {
           onChange={handleZoomChange}
         />
       </div>
+
       <div className="annotation-toggles">
         <h3>Toggle Annotations</h3>
         {annotationTypes.map((type) => (
@@ -252,8 +308,7 @@ const Viewer = ({ dziUrl, filename }) => {
             </label>
           </div>
         ))}
-        {!annotationTypes.length>0 && <>Please Upload Annotations!</>}
-        
+        {!annotationTypes.length > 0 && <>Please Upload Annotations!</>}
       </div>
 
       <div className="upload-section">
