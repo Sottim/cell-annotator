@@ -26,7 +26,7 @@
 
 .viewer-box {
   position: relative;
-  width: 60%; /* Fixed size for the viewer box */
+  width: 50%; /* Fixed size for the viewer box */
   height: 500px;
   margin: 0 auto; /* Center the box */
   border: 2px solid #B22222; /* Dark red border */
@@ -94,7 +94,7 @@ input[type="file"] {
 /* Horizontal Zoom Slider */
 .zoom-slider-container {
   margin-top: 20px;
-  width: 60%; /* Matches viewer box width */
+  width: 50%; /* Matches viewer box width */
   display: flex;
   justify-content: center;
   align-items: center;
