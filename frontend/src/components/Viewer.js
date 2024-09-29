@@ -149,7 +149,6 @@ const Viewer = ({ dziUrl, filename }) => {
   
     const visibleAnnotationsList = getVisibleAnnotations(annotations); // Get filtered annotations with only visible parts
   
-    console.log('Number of Annotations Being Drawn:', visibleAnnotationsList[0].geometry.coordinates.length);
   
     visibleAnnotationsList.forEach((feature) => {
       const { classification } = feature.properties;
@@ -272,13 +271,11 @@ const Viewer = ({ dziUrl, filename }) => {
         setZoomValue(newViewer.viewport.getZoom()); // Initialize slider with current zoom
         initializePixiApp();
       });
-      newViewer.addHandler('zoom', handlePanZoomStart);  // Trigger blur and spinner when zoom starts
-      newViewer.addHandler('pan', handlePanZoomStart);   // Trigger blur and spinner when pan starts
+      newViewer.addHandler('animation-start', handlePanZoomStart);  // Trigger blur and spinner when zoom starts
       newViewer.addHandler('animation-finish', handlePanZoomEnd);  // Remove blur and spinner after the animation ends
   
       return () => {
-        newViewer.removeHandler('zoom', handlePanZoomStart);
-        newViewer.removeHandler('pan', handlePanZoomStart);
+        newViewer.removeHandler('animation-start', handlePanZoomStart);
         newViewer.removeHandler('animation-finish', handlePanZoomEnd);
       };
     }
@@ -314,11 +311,15 @@ useEffect(() => {
     viewer.addHandler('pan', handlePanZoom);
     viewer.addHandler('zoom', handlePanZoom);
     viewer.addHandler('animation', handlePanZoom);
+    viewer.addHandler('animation-start', handlePanZoomStart);  // Trigger blur and spinner when zoom starts
+    viewer.addHandler('animation-finish', handlePanZoomEnd);  // Remove blur and spinner after the animation ends
 
     return () => {
       viewer.removeHandler('pan', handlePanZoom);
       viewer.removeHandler('zoom', handlePanZoom);
       viewer.removeHandler('animation', handlePanZoom);
+      viewer.removeHandler('animation-start', handlePanZoomStart);  // Trigger blur and spinner when zoom starts
+      viewer.removeHandler('animation-finish', handlePanZoomEnd);  // Remove blur and spinner after the animation ends
     };
   }
 }, [viewer, annotations, visibleAnnotations]);
