@@ -43,7 +43,74 @@ const Viewer = ({ dziUrl, filename }) => {
     viewerElement.classList.add('blur');
   };
 
-  // Remove blur from the viewer
+  const getViewportBounds = () => {
+    if (!viewer) return null;
+  
+    // Get the current viewport rectangle in image coordinates
+    const viewportRect = viewer.viewport.getBounds(true); // Get the viewport bounds in viewport coordinates
+    const imageRect = viewer.viewport.viewportToImageRectangle(viewportRect); // Convert it to image coordinates
+  
+    return {
+      xMin: imageRect.x,
+      xMax: imageRect.x + imageRect.width,
+      yMin: imageRect.y,
+      yMax: imageRect.y + imageRect.height,
+    };
+  };
+  
+  const getVisibleAnnotations = (annotations) => {
+    const bounds = getViewportBounds();
+    if (!bounds) return [];
+  
+    return annotations.map((annotation) => {
+      const { geometry } = annotation;
+      if (!geometry || !geometry.coordinates) return null;
+  
+      let filteredGeometry = { ...geometry };
+  
+      if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
+        // Filter Polygon or MultiPolygon coordinates to only those within the bounds
+        filteredGeometry.coordinates = geometry.coordinates.map((polygon) => {
+          return polygon.map((ring) => {
+            return ring.filter(([x, y]) => {
+              return (
+                x >= bounds.xMin &&
+                x <= bounds.xMax &&
+                y >= bounds.yMin &&
+                y <= bounds.yMax
+              );
+            });
+          }).filter((ring) => ring.length > 0);
+        }).filter((polygon) => polygon.length > 0);
+      } else if (geometry.type === 'Point' || geometry.type === 'MultiPoint') {
+        // Filter Point or MultiPoint coordinates to only those within the bounds
+        filteredGeometry.coordinates = geometry.coordinates.filter(([x, y]) => {
+          return (
+            x >= bounds.xMin &&
+            x <= bounds.xMax &&
+            y >= bounds.yMin &&
+            y <= bounds.yMax
+          );
+        });
+      }
+  
+      return filteredGeometryHasData(filteredGeometry) ? { ...annotation, geometry: filteredGeometry } : null;
+    }).filter((annotation) => annotation !== null);
+  };
+  
+  // Helper function to check if filtered geometry still has valid data
+  const filteredGeometryHasData = (geometry) => {
+    if (!geometry.coordinates) return false;
+    if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
+      return geometry.coordinates.length > 0 && geometry.coordinates.some(polygon => polygon.length > 0);
+    }
+    if (geometry.type === 'Point' || geometry.type === 'MultiPoint') {
+      return geometry.coordinates.length > 0;
+    }
+    return false;
+  };
+  
+  
   const removeBlur = () => {
     const viewerElement = document.getElementById('openseadragon-viewer');
     viewerElement.classList.remove('blur');
@@ -80,22 +147,22 @@ const Viewer = ({ dziUrl, filename }) => {
     const graphics = annotationGraphicsRef.current;
     graphics.clear(); // Clear previous drawings
   
-    const zoom = viewer.viewport.getZoom(true); // Get the current zoom level
-    const viewerSize = viewer.viewport.getContainerSize(); // Get viewer size for transformations
+    const visibleAnnotationsList = getVisibleAnnotations(annotations); // Get filtered annotations with only visible parts
   
-    annotations.forEach((feature) => {
+    console.log('Number of Annotations Being Drawn:', visibleAnnotationsList[0].geometry.coordinates.length);
+  
+    visibleAnnotationsList.forEach((feature) => {
       const { classification } = feature.properties;
       const { geometry } = feature;
   
       if (!geometry || !geometry.coordinates) return;
-      if (!visibleAnnotations[classification.name]) return; // Only draw visible annotations
   
       const rgbToHex = (r, g, b) => (r << 16) + (g << 8) + b;
       const hexColor = rgbToHex(classification.color[0], classification.color[1], classification.color[2]);
   
-      graphics.fill({ color: hexColor }); // Use the new fill method
-  
       if (geometry.type === 'MultiPolygon' || geometry.type === 'Polygon') {
+        graphics.beginFill(hexColor); // Start the fill
+  
         geometry.coordinates.forEach((polygon) => {
           polygon.forEach((ring) => {
             ring.forEach(([x, y], index) => {
@@ -115,12 +182,13 @@ const Viewer = ({ dziUrl, filename }) => {
               }
             });
             graphics.closePath();
-            graphics.fill(); // Fill the polygon
           });
         });
+  
+        graphics.endFill(); // Finish the fill
       }
   
-      // Handle MultiPoint
+      // Handle MultiPoint or Point
       if (geometry.type === 'MultiPoint' || geometry.type === 'Point') {
         geometry.coordinates.forEach(([x, y]) => {
           const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
@@ -129,9 +197,9 @@ const Viewer = ({ dziUrl, filename }) => {
           const adjustedX = screenPoint.x;
           const adjustedY = screenPoint.y;
   
-          // Draw a small circle or point to represent the point annotation
-          graphics.fill({ color: hexColor });
+          graphics.beginFill(hexColor);
           graphics.drawCircle(adjustedX, adjustedY, 2); // Adjust the radius for visibility
+          graphics.endFill();
         });
       }
     });
@@ -198,30 +266,24 @@ const Viewer = ({ dziUrl, filename }) => {
         tileSources: dziUrl,
         showNavigationControl: false,
       });
-
+  
       newViewer.addHandler('open', () => {
         setViewer(newViewer);
         setZoomValue(newViewer.viewport.getZoom()); // Initialize slider with current zoom
         initializePixiApp();
       });
       newViewer.addHandler('zoom', handlePanZoomStart);  // Trigger blur and spinner when zoom starts
-      newViewer.addHandler('pan', handlePanZoomStart);  // Trigger blur and spinner when pan starts
-      
+      newViewer.addHandler('pan', handlePanZoomStart);   // Trigger blur and spinner when pan starts
       newViewer.addHandler('animation-finish', handlePanZoomEnd);  // Remove blur and spinner after the animation ends
-      
-
-
+  
       return () => {
-        return () => {
-          newViewer.removeHandler('zoom', handlePanZoomStart);
-          newViewer.removeHandler('pan', handlePanZoomStart);
-          newViewer.removeHandler('animation-finish', handlePanZoomEnd);
-        };
-        
+        newViewer.removeHandler('zoom', handlePanZoomStart);
+        newViewer.removeHandler('pan', handlePanZoomStart);
+        newViewer.removeHandler('animation-finish', handlePanZoomEnd);
       };
     }
-  }, [dziUrl, viewer, drawAnnotationsWithPixi]);
-
+  }, [dziUrl, viewer]);
+  
   useEffect(() => {
     if (annotations.length > 0) {
       drawAnnotationsWithPixi();
@@ -295,7 +357,8 @@ useEffect(() => {
       <div className="viewer-wrapper">
         <div className="viewer-box">
           <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer"></div>
-          <div className="loading-spinner" id="loadingSpinner"></div>
+          <div className="loading-spinner" id="loadingSpinner"></div> 
+          //Commented out for now loading spinner
           {/* Legend Box */}
           <div className="annotation-legend">
             <ul>
