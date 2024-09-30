@@ -3,9 +3,8 @@ import OpenSeadragon from 'openseadragon';
 import axios from 'axios';
 import * as PIXI from 'pixi.js';
 import { Application } from 'pixi.js';
-import './Viewer.css'; // Import the stylesheet
+import './Viewer.css'; 
 import DBSCAN from 'density-clustering';
-import ClipLoader from 'react-spinners/ClipLoader'; // Import React Spinners
 
 const Viewer = ({ dziUrl, filename }) => {
   const viewerRef = useRef(null);
@@ -13,11 +12,10 @@ const Viewer = ({ dziUrl, filename }) => {
   const [annotations, setAnnotations] = useState([]);
   const [visibleAnnotations, setVisibleAnnotations] = useState({});
   const [annotationTypes, setAnnotationTypes] = useState([]);
-  const [zoomValue, setZoomValue] = useState(0); // State to control zoom slider
-  const [statistics, setStatistics] = useState([]); // State to store clustering statistics
+  const [zoomValue, setZoomValue] = useState(0); 
   const pixiAppRef = useRef(null);
   const annotationGraphicsRef = useRef(null);
-  const [annotationFile, setAnnotationFile] = useState(null); // Define annotation file state
+  const [annotationFile, setAnnotationFile] = useState(null); 
 
   const initializePixiApp = () => {
     const canvas = document.createElement('canvas');
@@ -27,19 +25,16 @@ const Viewer = ({ dziUrl, filename }) => {
   
     app.init({
       view,
-      backgroundAlpha: 0,  // Ensure the canvas is fully transparent
-      resizeTo: viewerRef.current,  // Ensure the canvas resizes with the viewer
+      backgroundAlpha: 0,  
+      resizeTo: viewerRef.current, 
     }).then(() => {
-      viewerRef.current.appendChild(canvas);  // Append the OffscreenCanvas to the viewer
+      viewerRef.current.appendChild(canvas); 
       pixiAppRef.current = app;
-  
-      // Create the graphics container for annotations
       annotationGraphicsRef.current = new PIXI.Graphics();
       app.stage.addChild(annotationGraphicsRef.current);
     }).catch(err => console.error("PixiJS Initialization error: ", err));
   };
 
-  // Add blur to the viewer
   const addBlur = () => {
     const viewerElement = document.getElementById('openseadragon-viewer');
     viewerElement.classList.add('blur');
@@ -48,9 +43,8 @@ const Viewer = ({ dziUrl, filename }) => {
   const getViewportBounds = () => {
     if (!viewer) return null;
   
-    // Get the current viewport rectangle in image coordinates
-    const viewportRect = viewer.viewport.getBounds(true); // Get the viewport bounds in viewport coordinates
-    const imageRect = viewer.viewport.viewportToImageRectangle(viewportRect); // Convert it to image coordinates
+    const viewportRect = viewer.viewport.getBounds(true); 
+    const imageRect = viewer.viewport.viewportToImageRectangle(viewportRect); 
   
     return {
       xMin: imageRect.x,
@@ -100,7 +94,6 @@ const Viewer = ({ dziUrl, filename }) => {
     }).filter((annotation) => annotation !== null);
   };
   
-  // Helper function to check if filtered geometry still has valid data
   const filteredGeometryHasData = (geometry) => {
     if (!geometry.coordinates) return false;
     if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
@@ -125,7 +118,7 @@ const Viewer = ({ dziUrl, filename }) => {
       if (spinnerContainer) {
         spinnerContainer.style.display = 'block';
       }
-    }, 0); // Delay slightly to ensure the state update is applied
+    }, 0);
   };
   
   
@@ -154,38 +147,26 @@ const Viewer = ({ dziUrl, filename }) => {
   
     setLoadingStatus("Drawing annotations...");
     const graphics = annotationGraphicsRef.current;
-    graphics.clear(); // Clear previous drawings
+    graphics.clear();
   
     if (viewer.viewport.getZoom() <= ZOOM_THRESHOLD) {
-      // Use precomputed clusters if they exist
-      if (precomputedClusters) {
-        console.log("Drawing clusters...");
-  
+      if (precomputedClusters) {  
         Object.keys(precomputedClusters).forEach((type) => {
           if (!visibleAnnotations[type]) return;
-  
           const clusters = precomputedClusters[type];
-          
-          // Assign color based on the annotation type
           const color = annotations.find(
             (annotation) => annotation.properties.classification.name === type
           )?.properties.classification.color;
-  
           if (!color) return;
-  
           const hexColor = (color[0] << 16) + (color[1] << 8) + color[2];
-  
           clusters.forEach((cluster) => {
             const clusterCentroid = cluster.points.reduce(
               (acc, point) => [acc[0] + point[0], acc[1] + point[1]],
               [0, 0]
             ).map((sum) => sum / cluster.points.length);
-  
             const [x, y] = clusterCentroid;
             const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
             const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
-  
-            // Adjust cluster size to be smaller for better visualization
             const radius = Math.min(Math.max(cluster.points.length * 0.2, 3), 30);
             graphics.beginFill(hexColor, 0.8);
             graphics.drawCircle(screenPoint.x, screenPoint.y, radius);
@@ -216,10 +197,9 @@ const Viewer = ({ dziUrl, filename }) => {
             graphics.endFill();
           });
         } else if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
-          // Draw each ring of the polygon/multi-polygon
           geometry.coordinates.forEach((polygon) => {
             polygon.forEach((ring) => {
-              graphics.beginFill(hexColor, 0.6); // Use semi-transparent fill for polygons
+              graphics.beginFill(hexColor, 0.6); 
               ring.forEach(([x, y], index) => {
                 const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
                 const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
@@ -238,11 +218,9 @@ const Viewer = ({ dziUrl, filename }) => {
     }
   
     pixiAppRef.current.renderer.render(pixiAppRef.current.stage);
-    setLoadingStatus("Loading annotations"); // Reset loading status after drawing
+    setLoadingStatus("Loading annotations"); 
   };
 
-  
-  // Throttling function to improve rendering performance during interactions
   const throttle = (func, limit) => {
     let inThrottle;
     return function() {
@@ -259,14 +237,10 @@ const Viewer = ({ dziUrl, filename }) => {
   const handlePanZoomEnd = throttle(() => {
     removeBlur();
     hideLoadingSpinner();
-    drawAnnotationsWithPixi(); // Re-draw annotations after zoom/pan ends
-  }, 200); // Throttle clustering and rendering to avoid lag
+    drawAnnotationsWithPixi(); 
+  }, 200); 
   
-  
-
-  
-  // Update the canvas size when the viewer resizes
-  const updatePixiAppSize = () => {
+    const updatePixiAppSize = () => {
     if (pixiAppRef.current && viewerRef.current) {
       const app = pixiAppRef.current;
       app.renderer.resize(viewerRef.current.clientWidth, viewerRef.current.clientHeight);
@@ -276,7 +250,6 @@ const Viewer = ({ dziUrl, filename }) => {
 
   useEffect(() => {
     if (viewer) {
-      // Update zoom value continuously during zoom events
       const updateZoomValue = () => {
         const currentZoom = viewer.viewport.getZoom();
         setZoomValue(currentZoom);
@@ -294,28 +267,19 @@ const Viewer = ({ dziUrl, filename }) => {
     }
   }, [viewer]);
 
-  const [precomputedClusters, setPrecomputedClusters] = useState(null); // Store precomputed clusters
+  const [precomputedClusters, setPrecomputedClusters] = useState(null); 
 
   const loadAndDisplayAnnotations = async (annotationFilename) => {
     try {
       console.log("Starting to load annotations...");
       showLoadingSpinner();
       addBlur();
-  
-      // Step 1: Load Annotations
       const response = await axios.get(`http://localhost:5000/annotations/${annotationFilename}`);
-      const features = response.data;
-  
-      console.log("Annotations loaded.");
-  
+      const features = response.data;  
       setAnnotations(features);
-  
-      // Step 2: Compute Unique Types
       const uniqueTypes = [...new Set(features.map((feature) => feature.properties.classification.name))];
       setAnnotationTypes(uniqueTypes);
       setVisibleAnnotations(uniqueTypes.reduce((acc, type) => ({ ...acc, [type]: true }), {}));
-  
-      // Step 3: Compute Clusters Asynchronously
       console.log("Starting clustering process...");
       const computedClusters = await computeClustersAsync(features);
       if (computedClusters) {
@@ -324,10 +288,8 @@ const Viewer = ({ dziUrl, filename }) => {
       } else {
         console.error("Clustering failed or no clusters were produced.");
       }
-  
-      // Step 4: Hide Loader/Blur and Update Rendering
       if (viewer) {
-        updatePixiAppSize(); // Redraw annotations
+        updatePixiAppSize();
       }
       hideLoadingSpinner();
       removeBlur();
@@ -350,15 +312,12 @@ const Viewer = ({ dziUrl, filename }) => {
         const annotationsOfType = annotations.filter(
           (annotation) => annotation.properties.classification.name === type
         );
-
-        // Extract coordinates from annotations
         const points = annotationsOfType
           .map((annotation) => {
             const { geometry } = annotation;
             if (geometry && (geometry.type === 'Point' || geometry.type === 'MultiPoint')) {
               return geometry.coordinates;
             } else if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
-              // Use all points from each polygon ring instead of calculating centroids
               return geometry.coordinates.flatMap((polygon) =>
                 polygon.flatMap((ring) => ring)
               );
@@ -368,31 +327,25 @@ const Viewer = ({ dziUrl, filename }) => {
           .flat()
           .filter((coord) => coord !== null);
 
-        console.log(`Found ${points.length} points for type ${type}`);
         newStatistics.push({ type, points: points.length });
 
-        // Ensure there are enough points for clustering
         if (points.length === 0) {
           console.warn(`No points available for type ${type}, skipping clustering.`);
           return;
         }
 
-        // Sample the points to reduce the load for clustering
         const sampledPoints = points.filter((_, index) => index % 10 === 0);
         console.log(`Sampled ${sampledPoints.length} points for clustering for type ${type}`);
         newStatistics.push({ type, sampledPoints: sampledPoints.length });
 
-        // Adjust DBSCAN parameters
         const epsilon = 25; // Adjust epsilon to reduce cluster size
         const minPoints = 1; // Adjust minPoints
 
-        // Run DBSCAN clustering
         const dbscan = new DBSCAN.DBSCAN();
         const clusters = dbscan.run(sampledPoints, epsilon, minPoints);
         console.log(`Clusters found for type ${type}:`, clusters);
         newStatistics.push({ type, clusters: clusters.length });
 
-        // Store clustered annotations
         const clusteredAnnotations = clusters.map((cluster, index) => ({
           clusterId: `${type}-${index}`,
           points: cluster.map((pointIndex) => sampledPoints[pointIndex]),
@@ -402,20 +355,11 @@ const Viewer = ({ dziUrl, filename }) => {
         typeClusterMap[type] = clusteredAnnotations;
       });
 
-      setStatistics(newStatistics); // Update the statistics for display
-      setLoadingStatus("Loading Annotations"); // Reset loading status when clustering is complete
+      setLoadingStatus("Loading Annotations"); 
       resolve(typeClusterMap);
     });
   };
   
-  
-  
-  
-  
-  
-  
-
-  // Toggle annotation visibility
   const handleToggleAnnotation = (type) => {
     setVisibleAnnotations((prevState) => ({
       ...prevState,
@@ -432,11 +376,11 @@ const Viewer = ({ dziUrl, filename }) => {
   
       newViewer.addHandler('open', () => {
         setViewer(newViewer);
-        setZoomValue(newViewer.viewport.getZoom()); // Initialize slider with current zoom
+        setZoomValue(newViewer.viewport.getZoom());
         initializePixiApp();
       });
-      newViewer.addHandler('animation-start', handlePanZoomStart);  // Trigger blur and spinner when zoom starts
-      newViewer.addHandler('animation-finish', handlePanZoomEnd);  // Remove blur and spinner after the animation ends
+      newViewer.addHandler('animation-start', handlePanZoomStart);  
+      newViewer.addHandler('animation-finish', handlePanZoomEnd);  
   
       return () => {
         newViewer.removeHandler('animation-start', handlePanZoomStart);
@@ -462,7 +406,6 @@ const Viewer = ({ dziUrl, filename }) => {
 
 const handlePanZoom = () => {
   if (animationFrameId) {
-    // cancelAnimationFrame(animationFrameId);
   }
   animationFrameId = requestAnimationFrame(() => {
     drawAnnotationsWithPixi();
@@ -470,21 +413,20 @@ const handlePanZoom = () => {
   });
 };
 
-// Attach pan and zoom event handlers to the viewer
 useEffect(() => {
   if (viewer) {
     viewer.addHandler('pan', handlePanZoom);
     viewer.addHandler('zoom', handlePanZoom);
     viewer.addHandler('animation', handlePanZoom);
-    viewer.addHandler('animation-start', handlePanZoomStart);  // Trigger blur and spinner when zoom starts
-    viewer.addHandler('animation-finish', handlePanZoomEnd);  // Remove blur and spinner after the animation ends
+    viewer.addHandler('animation-start', handlePanZoomStart); 
+    viewer.addHandler('animation-finish', handlePanZoomEnd);  
 
     return () => {
       viewer.removeHandler('pan', handlePanZoom);
       viewer.removeHandler('zoom', handlePanZoom);
       viewer.removeHandler('animation', handlePanZoom);
-      viewer.removeHandler('animation-start', handlePanZoomStart);  // Trigger blur and spinner when zoom starts
-      viewer.removeHandler('animation-finish', handlePanZoomEnd);  // Remove blur and spinner after the animation ends
+      viewer.removeHandler('animation-start', handlePanZoomStart); 
+      viewer.removeHandler('animation-finish', handlePanZoomEnd); 
     };
   }
 }, [viewer, annotations, visibleAnnotations]);
@@ -509,7 +451,7 @@ useEffect(() => {
       });
 
       await loadAndDisplayAnnotations(annotationFile.name);
-      updatePixiAppSize(); // Ensure canvas and annotations are redrawn after upload
+      updatePixiAppSize(); 
     } catch (error) {
       console.error('Error uploading annotation file:', error);
     }
@@ -527,8 +469,6 @@ useEffect(() => {
           <div className="loading-spinner"></div>
           <div className="loading-status">{loadingStatus}...</div>
         </div>
-
-          {/* Legend Box */}
           <div className="annotation-legend">
             <ul>
               {annotationTypes.map((type) => {
