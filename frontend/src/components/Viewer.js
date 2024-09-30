@@ -149,9 +149,12 @@ const Viewer = ({ dziUrl, filename }) => {
   
     const visibleAnnotationsList = getVisibleAnnotations(annotations); // Get filtered annotations with only visible parts
   
-  
     visibleAnnotationsList.forEach((feature) => {
       const { classification } = feature.properties;
+  
+      // Check if the annotation type is visible
+      if (!visibleAnnotations[classification.name]) return;
+  
       const { geometry } = feature;
   
       if (!geometry || !geometry.coordinates) return;
@@ -206,6 +209,7 @@ const Viewer = ({ dziUrl, filename }) => {
     // Ensure rendering
     pixiAppRef.current.renderer.render(pixiAppRef.current.stage);
   };
+  
   
   // Update the canvas size when the viewer resizes
   const updatePixiAppSize = () => {
@@ -286,6 +290,7 @@ const Viewer = ({ dziUrl, filename }) => {
       drawAnnotationsWithPixi();
     }
   }, [visibleAnnotations, annotations, zoomValue]);
+  
 
   const handleZoomChange = (event) => {
     const zoomLevel = parseFloat(event.target.value);
