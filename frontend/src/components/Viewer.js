@@ -119,89 +119,33 @@ const Viewer = ({ dziUrl, filename }) => {
   };
 
   const showLoadingSpinner = () => {
-    setLoadingStatus("Loading annotations...");
+    setLoadingStatus("Loading annotations");
+    setTimeout(() => {
+      const spinnerContainer = document.getElementById('loadingSpinner');
+      if (spinnerContainer) {
+        spinnerContainer.style.display = 'block';
+      }
+    }, 0); // Delay slightly to ensure the state update is applied
   };
-
+  
+  
   const hideLoadingSpinner = () => {
-    setLoadingStatus("");
+    setLoadingStatus("Loading annotations");
+    const spinnerContainer = document.getElementById('loadingSpinner');
+    if (spinnerContainer) {
+      spinnerContainer.style.display = 'none';
+    }
   };
-
+  
 
   const handlePanZoomStart = () => {
     console.log('Pan/Zoom started');
+    setLoadingStatus("Loading annotations...");
     addBlur();
     showLoadingSpinner();
   };
   
 
-  
-  const clusterAnnotationsByType = (annotations) => {
-    try {
-      console.log("Starting clustering process...");
-      showLoadingSpinner();
-      addBlur();
-  
-      const typeClusterMap = {};
-      annotationTypes.forEach((type) => {
-        const annotationsOfType = annotations.filter(
-          (annotation) => annotation.properties.classification.name === type
-        );
-  
-        const points = annotationsOfType
-          .map((annotation) => {
-            const { geometry } = annotation;
-            if (geometry && (geometry.type === 'Point' || geometry.type === 'MultiPoint')) {
-              return geometry.coordinates;
-            } else if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
-              // Simplify MultiPolygon features to centroids
-              return geometry.coordinates.map((polygon) => {
-                const ring = polygon[0];
-                const centroid = ring.reduce(
-                  (acc, point) => [acc[0] + point[0], acc[1] + point[1]],
-                  [0, 0]
-                ).map((sum) => sum / ring.length);
-                return centroid;
-              });
-            }
-            return null;
-          })
-          .flat()
-          .filter((coord) => coord !== null);
-  
-        console.log(`Found ${points.length} points for type ${type}`);
-  
-        const sampledPoints = points.filter((_, index) => index % 50 === 0);
-        console.log(`Sampled ${sampledPoints.length} points for clustering`);
-  
-        // Run DBSCAN clustering with adjusted parameters
-        const dbscan = new DBSCAN.DBSCAN();
-        const clusters = dbscan.run(sampledPoints, 25, 1); //MULTIPOLYGON CALC
-  
-        console.log(`Clusters found for type ${type}:`, clusters);
-  
-        const clusteredAnnotations = clusters.map((cluster, index) => ({
-          clusterId: `${type}-${index}`,
-          points: cluster.map((pointIndex) => sampledPoints[pointIndex]),
-          type,
-        }));
-  
-        typeClusterMap[type] = clusteredAnnotations;
-      });
-  
-      hideLoadingSpinner();
-      removeBlur();
-  
-      return typeClusterMap;
-  
-    } catch (error) {
-      console.error("Error during clustering process:", error);
-      hideLoadingSpinner();
-      removeBlur();
-      return null;
-    }
-  };
-  
-  
   const ZOOM_THRESHOLD = 6.0;
 
   const drawAnnotationsWithPixi = () => {
@@ -294,7 +238,7 @@ const Viewer = ({ dziUrl, filename }) => {
     }
   
     pixiAppRef.current.renderer.render(pixiAppRef.current.stage);
-    setLoadingStatus(""); // Reset loading status after drawing
+    setLoadingStatus("Loading annotations"); // Reset loading status after drawing
   };
 
   
@@ -459,7 +403,7 @@ const Viewer = ({ dziUrl, filename }) => {
       });
 
       setStatistics(newStatistics); // Update the statistics for display
-      setLoadingStatus(""); // Reset loading status when clustering is complete
+      setLoadingStatus("Loading Annotations"); // Reset loading status when clustering is complete
       resolve(typeClusterMap);
     });
   };
@@ -505,7 +449,7 @@ const Viewer = ({ dziUrl, filename }) => {
     if (annotations.length > 0) {
       drawAnnotationsWithPixi();
     }
-  }, [visibleAnnotations, annotations, zoomValue]);
+  }, [visibleAnnotations, annotations, zoomValue, loadingStatus]);
   
 
   const handleZoomChange = (event) => {
@@ -579,24 +523,11 @@ useEffect(() => {
       <div className="viewer-wrapper">
         <div className="viewer-box">
           <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer"></div>
-          {loadingStatus && (
-            <div className="loading-overlay">
-              <ClipLoader color={"#123abc"} loading={true} size={50} />
-              <div className="loading-status">
-                {loadingStatus}
-                <div className="loading-statistics">
-                  {statistics.map((stat, index) => (
-                    <div key={index} className="stat-item">
-                      <strong>{stat.type}:</strong><br />
-                      {stat.points && `Points Found: ${stat.points}`}<br />
-                      {stat.sampledPoints && `Sampled Points: ${stat.sampledPoints}`}<br />
-                      {stat.clusters && `Clusters Found: ${stat.clusters}`}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+          <div className="loading-spinner-container" id="loadingSpinner" style={{ display: loadingStatus ? 'block' : 'none' }}>
+          <div className="loading-spinner"></div>
+          <div className="loading-status">{loadingStatus}...</div>
+        </div>
+
           {/* Legend Box */}
           <div className="annotation-legend">
             <ul>

@@ -74,7 +74,17 @@
   transition: filter 0.3s ease-out;
 } 
 
-/* Loading spinner */
+
+
+.loading-spinner-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 1005;
+}
+
 .loading-spinner {
   border: 5px solid rgba(0, 0, 0, 0.1);
   border-left-color: #22a6b3;
@@ -82,12 +92,16 @@
   width: 40px;
   height: 40px;
   animation: spin 1s linear infinite;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  margin: -20px 0 0 -20px;
-  display: none;
+  margin: 0 auto;
 }
+
+.loading-status {
+  margin-top: 8px;
+  font-size: 14px;
+  font-family: 'Arial', sans-serif;
+  color: white;
+}
+
 
 .loading-overlay
 {
