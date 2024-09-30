@@ -65,7 +65,6 @@ const Viewer = ({ dziUrl, filename }) => {
       let filteredGeometry = { ...geometry };
   
       if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
-        // Filter Polygon or MultiPolygon coordinates to only those within the bounds
         filteredGeometry.coordinates = geometry.coordinates.map((polygon) => {
           return polygon.map((ring) => {
             return ring.filter(([x, y]) => {
@@ -79,7 +78,6 @@ const Viewer = ({ dziUrl, filename }) => {
           }).filter((ring) => ring.length > 0);
         }).filter((polygon) => polygon.length > 0);
       } else if (geometry.type === 'Point' || geometry.type === 'MultiPoint') {
-        // Filter Point or MultiPoint coordinates to only those within the bounds
         filteredGeometry.coordinates = geometry.coordinates.filter(([x, y]) => {
           return (
             x >= bounds.xMin &&
