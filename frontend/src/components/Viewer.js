@@ -4,6 +4,8 @@ import axios from 'axios';
 import * as PIXI from 'pixi.js';
 import { Application } from 'pixi.js';
 import './Viewer.css'; // Import the stylesheet
+import DBSCAN from 'density-clustering';
+import ClipLoader from 'react-spinners/ClipLoader'; // Import React Spinners
 
 const Viewer = ({ dziUrl, filename }) => {
   const viewerRef = useRef(null);
@@ -12,7 +14,7 @@ const Viewer = ({ dziUrl, filename }) => {
   const [visibleAnnotations, setVisibleAnnotations] = useState({});
   const [annotationTypes, setAnnotationTypes] = useState([]);
   const [zoomValue, setZoomValue] = useState(0); // State to control zoom slider
-
+  const [statistics, setStatistics] = useState([]); // State to store clustering statistics
   const pixiAppRef = useRef(null);
   const annotationGraphicsRef = useRef(null);
   const [annotationFile, setAnnotationFile] = useState(null); // Define annotation file state
@@ -116,17 +118,14 @@ const Viewer = ({ dziUrl, filename }) => {
     viewerElement.classList.remove('blur');
   };
 
-  // Show loading spinner
   const showLoadingSpinner = () => {
-    const spinner = document.getElementById('loadingSpinner');
-    spinner.style.display = 'block';
+    setLoadingStatus("Loading annotations...");
   };
 
-  // Hide loading spinner
   const hideLoadingSpinner = () => {
-    const spinner = document.getElementById('loadingSpinner');
-    spinner.style.display = 'none';
+    setLoadingStatus("");
   };
+
 
   const handlePanZoomStart = () => {
     console.log('Pan/Zoom started');
@@ -134,82 +133,193 @@ const Viewer = ({ dziUrl, filename }) => {
     showLoadingSpinner();
   };
   
-  const handlePanZoomEnd = () => {
-    console.log('Pan/Zoom finished');
-    removeBlur();
-    hideLoadingSpinner();
-    drawAnnotationsWithPixi();  // Re-draw annotations after zoom/pan ends
+
+  
+  const clusterAnnotationsByType = (annotations) => {
+    try {
+      console.log("Starting clustering process...");
+      showLoadingSpinner();
+      addBlur();
+  
+      const typeClusterMap = {};
+      annotationTypes.forEach((type) => {
+        const annotationsOfType = annotations.filter(
+          (annotation) => annotation.properties.classification.name === type
+        );
+  
+        const points = annotationsOfType
+          .map((annotation) => {
+            const { geometry } = annotation;
+            if (geometry && (geometry.type === 'Point' || geometry.type === 'MultiPoint')) {
+              return geometry.coordinates;
+            } else if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
+              // Simplify MultiPolygon features to centroids
+              return geometry.coordinates.map((polygon) => {
+                const ring = polygon[0];
+                const centroid = ring.reduce(
+                  (acc, point) => [acc[0] + point[0], acc[1] + point[1]],
+                  [0, 0]
+                ).map((sum) => sum / ring.length);
+                return centroid;
+              });
+            }
+            return null;
+          })
+          .flat()
+          .filter((coord) => coord !== null);
+  
+        console.log(`Found ${points.length} points for type ${type}`);
+  
+        const sampledPoints = points.filter((_, index) => index % 50 === 0);
+        console.log(`Sampled ${sampledPoints.length} points for clustering`);
+  
+        // Run DBSCAN clustering with adjusted parameters
+        const dbscan = new DBSCAN.DBSCAN();
+        const clusters = dbscan.run(sampledPoints, 25, 1); //MULTIPOLYGON CALC
+  
+        console.log(`Clusters found for type ${type}:`, clusters);
+  
+        const clusteredAnnotations = clusters.map((cluster, index) => ({
+          clusterId: `${type}-${index}`,
+          points: cluster.map((pointIndex) => sampledPoints[pointIndex]),
+          type,
+        }));
+  
+        typeClusterMap[type] = clusteredAnnotations;
+      });
+  
+      hideLoadingSpinner();
+      removeBlur();
+  
+      return typeClusterMap;
+  
+    } catch (error) {
+      console.error("Error during clustering process:", error);
+      hideLoadingSpinner();
+      removeBlur();
+      return null;
+    }
   };
   
+  
+  const ZOOM_THRESHOLD = 6.0;
+
   const drawAnnotationsWithPixi = () => {
+    const visibleAnnotationsInViewport = getVisibleAnnotations(annotations);
     if (!viewer || !viewer.world || !pixiAppRef.current || !annotationGraphicsRef.current) return;
   
+    setLoadingStatus("Drawing annotations...");
     const graphics = annotationGraphicsRef.current;
     graphics.clear(); // Clear previous drawings
   
-    const visibleAnnotationsList = getVisibleAnnotations(annotations); // Get filtered annotations with only visible parts
+    if (viewer.viewport.getZoom() <= ZOOM_THRESHOLD) {
+      // Use precomputed clusters if they exist
+      if (precomputedClusters) {
+        console.log("Drawing clusters...");
   
-    visibleAnnotationsList.forEach((feature) => {
-      const { classification } = feature.properties;
+        Object.keys(precomputedClusters).forEach((type) => {
+          if (!visibleAnnotations[type]) return;
   
-      // Check if the annotation type is visible
-      if (!visibleAnnotations[classification.name]) return;
+          const clusters = precomputedClusters[type];
+          
+          // Assign color based on the annotation type
+          const color = annotations.find(
+            (annotation) => annotation.properties.classification.name === type
+          )?.properties.classification.color;
   
-      const { geometry } = feature;
+          if (!color) return;
   
-      if (!geometry || !geometry.coordinates) return;
+          const hexColor = (color[0] << 16) + (color[1] << 8) + color[2];
   
-      const rgbToHex = (r, g, b) => (r << 16) + (g << 8) + b;
-      const hexColor = rgbToHex(classification.color[0], classification.color[1], classification.color[2]);
+          clusters.forEach((cluster) => {
+            const clusterCentroid = cluster.points.reduce(
+              (acc, point) => [acc[0] + point[0], acc[1] + point[1]],
+              [0, 0]
+            ).map((sum) => sum / cluster.points.length);
   
-      if (geometry.type === 'MultiPolygon' || geometry.type === 'Polygon') {
-        graphics.beginFill(hexColor); // Start the fill
+            const [x, y] = clusterCentroid;
+            const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
+            const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
   
-        geometry.coordinates.forEach((polygon) => {
-          polygon.forEach((ring) => {
-            ring.forEach(([x, y], index) => {
-              // Convert image coordinates to viewport coordinates
-              const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
-  
-              // Convert viewport coordinates to viewer element coordinates (screen coordinates)
-              const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
-  
-              const adjustedX = screenPoint.x;
-              const adjustedY = screenPoint.y;
-  
-              if (index === 0) {
-                graphics.moveTo(adjustedX, adjustedY);
-              } else {
-                graphics.lineTo(adjustedX, adjustedY);
-              }
-            });
-            graphics.closePath();
+            // Adjust cluster size to be smaller for better visualization
+            const radius = Math.min(Math.max(cluster.points.length * 0.2, 3), 30);
+            graphics.beginFill(hexColor, 0.8);
+            graphics.drawCircle(screenPoint.x, screenPoint.y, radius);
+            graphics.endFill();
           });
         });
-  
-        graphics.endFill(); // Finish the fill
+      } else {
+        console.warn("No clusters found for drawing.");
       }
+    } else {
+      console.log("Drawing individual points...");
+      visibleAnnotationsInViewport.forEach((annotation) => {
+        const { geometry, properties } = annotation;
+        if (!geometry || !geometry.coordinates) return;
   
-      // Handle MultiPoint or Point
-      if (geometry.type === 'MultiPoint' || geometry.type === 'Point') {
-        geometry.coordinates.forEach(([x, y]) => {
-          const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
-          const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
+        const color = properties.classification.color;
+        if (!color) return;
   
-          const adjustedX = screenPoint.x;
-          const adjustedY = screenPoint.y;
+        const hexColor = (color[0] << 16) + (color[1] << 8) + color[2];
   
-          graphics.beginFill(hexColor);
-          graphics.drawCircle(adjustedX, adjustedY, 2); // Adjust the radius for visibility
-          graphics.endFill();
-        });
-      }
-    });
+        if (geometry.type === 'Point' || geometry.type === 'MultiPoint') {
+          geometry.coordinates.forEach(([x, y]) => {
+            const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
+            const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
   
-    // Ensure rendering
+            graphics.beginFill(hexColor);
+            graphics.drawCircle(screenPoint.x, screenPoint.y, 3);
+            graphics.endFill();
+          });
+        } else if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
+          // Draw each ring of the polygon/multi-polygon
+          geometry.coordinates.forEach((polygon) => {
+            polygon.forEach((ring) => {
+              graphics.beginFill(hexColor, 0.6); // Use semi-transparent fill for polygons
+              ring.forEach(([x, y], index) => {
+                const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
+                const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
+                if (index === 0) {
+                  graphics.moveTo(screenPoint.x, screenPoint.y);
+                } else {
+                  graphics.lineTo(screenPoint.x, screenPoint.y);
+                }
+              });
+              graphics.closePath();
+              graphics.endFill();
+            });
+          });
+        }
+      });
+    }
+  
     pixiAppRef.current.renderer.render(pixiAppRef.current.stage);
+    setLoadingStatus(""); // Reset loading status after drawing
+  };
+
+  
+  // Throttling function to improve rendering performance during interactions
+  const throttle = (func, limit) => {
+    let inThrottle;
+    return function() {
+      const args = arguments;
+      const context = this;
+      if (!inThrottle) {
+        func.apply(context, args);
+        inThrottle = true;
+        setTimeout(() => (inThrottle = false), limit);
+      }
+    };
   };
   
+  const handlePanZoomEnd = throttle(() => {
+    removeBlur();
+    hideLoadingSpinner();
+    drawAnnotationsWithPixi(); // Re-draw annotations after zoom/pan ends
+  }, 200); // Throttle clustering and rendering to avoid lag
+  
+  
+
   
   // Update the canvas size when the viewer resizes
   const updatePixiAppSize = () => {
@@ -222,38 +332,144 @@ const Viewer = ({ dziUrl, filename }) => {
 
   useEffect(() => {
     if (viewer) {
+      // Update zoom value continuously during zoom events
       const updateZoomValue = () => {
-        setZoomValue(viewer.viewport.getZoom());
+        const currentZoom = viewer.viewport.getZoom();
+        setZoomValue(currentZoom);
       };
   
       viewer.addHandler('zoom', updateZoomValue);
+      viewer.addHandler('animation', updateZoomValue);
+      viewer.addHandler('animation-finish', updateZoomValue);
   
       return () => {
         viewer.removeHandler('zoom', updateZoomValue);
+        viewer.removeHandler('animation', updateZoomValue);
+        viewer.removeHandler('animation-finish', updateZoomValue);
       };
     }
   }, [viewer]);
-  
 
-  // Load and display annotations
+  const [precomputedClusters, setPrecomputedClusters] = useState(null); // Store precomputed clusters
+
   const loadAndDisplayAnnotations = async (annotationFilename) => {
     try {
+      console.log("Starting to load annotations...");
+      showLoadingSpinner();
+      addBlur();
+  
+      // Step 1: Load Annotations
       const response = await axios.get(`http://localhost:5000/annotations/${annotationFilename}`);
       const features = response.data;
-
+  
+      console.log("Annotations loaded.");
+  
       setAnnotations(features);
+  
+      // Step 2: Compute Unique Types
       const uniqueTypes = [...new Set(features.map((feature) => feature.properties.classification.name))];
-
       setAnnotationTypes(uniqueTypes);
       setVisibleAnnotations(uniqueTypes.reduce((acc, type) => ({ ...acc, [type]: true }), {}));
-
-      if (viewer) {
-        updatePixiAppSize(); // Ensure that annotations are drawn when loaded
+  
+      // Step 3: Compute Clusters Asynchronously
+      console.log("Starting clustering process...");
+      const computedClusters = await computeClustersAsync(features);
+      if (computedClusters) {
+        console.log("Clustering complete.");
+        setPrecomputedClusters(computedClusters);
+      } else {
+        console.error("Clustering failed or no clusters were produced.");
       }
+  
+      // Step 4: Hide Loader/Blur and Update Rendering
+      if (viewer) {
+        updatePixiAppSize(); // Redraw annotations
+      }
+      hideLoadingSpinner();
+      removeBlur();
+  
     } catch (error) {
-      console.error('Error loading annotations:', error);
+      console.error('Error loading annotations or clustering:', error);
+      hideLoadingSpinner();
+      removeBlur();
     }
   };
+  const [loadingStatus, setLoadingStatus] = useState("");
+
+  const computeClustersAsync = (annotations) => {
+    return new Promise((resolve) => {
+      setLoadingStatus("Clustering annotations...");
+      const typeClusterMap = {};
+      const newStatistics = [];
+
+      annotationTypes.forEach((type) => {
+        const annotationsOfType = annotations.filter(
+          (annotation) => annotation.properties.classification.name === type
+        );
+
+        // Extract coordinates from annotations
+        const points = annotationsOfType
+          .map((annotation) => {
+            const { geometry } = annotation;
+            if (geometry && (geometry.type === 'Point' || geometry.type === 'MultiPoint')) {
+              return geometry.coordinates;
+            } else if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
+              // Use all points from each polygon ring instead of calculating centroids
+              return geometry.coordinates.flatMap((polygon) =>
+                polygon.flatMap((ring) => ring)
+              );
+            }
+            return null;
+          })
+          .flat()
+          .filter((coord) => coord !== null);
+
+        console.log(`Found ${points.length} points for type ${type}`);
+        newStatistics.push({ type, points: points.length });
+
+        // Ensure there are enough points for clustering
+        if (points.length === 0) {
+          console.warn(`No points available for type ${type}, skipping clustering.`);
+          return;
+        }
+
+        // Sample the points to reduce the load for clustering
+        const sampledPoints = points.filter((_, index) => index % 10 === 0);
+        console.log(`Sampled ${sampledPoints.length} points for clustering for type ${type}`);
+        newStatistics.push({ type, sampledPoints: sampledPoints.length });
+
+        // Adjust DBSCAN parameters
+        const epsilon = 25; // Adjust epsilon to reduce cluster size
+        const minPoints = 1; // Adjust minPoints
+
+        // Run DBSCAN clustering
+        const dbscan = new DBSCAN.DBSCAN();
+        const clusters = dbscan.run(sampledPoints, epsilon, minPoints);
+        console.log(`Clusters found for type ${type}:`, clusters);
+        newStatistics.push({ type, clusters: clusters.length });
+
+        // Store clustered annotations
+        const clusteredAnnotations = clusters.map((cluster, index) => ({
+          clusterId: `${type}-${index}`,
+          points: cluster.map((pointIndex) => sampledPoints[pointIndex]),
+          type,
+        }));
+
+        typeClusterMap[type] = clusteredAnnotations;
+      });
+
+      setStatistics(newStatistics); // Update the statistics for display
+      setLoadingStatus(""); // Reset loading status when clustering is complete
+      resolve(typeClusterMap);
+    });
+  };
+  
+  
+  
+  
+  
+  
+  
 
   // Toggle annotation visibility
   const handleToggleAnnotation = (type) => {
@@ -363,8 +579,24 @@ useEffect(() => {
       <div className="viewer-wrapper">
         <div className="viewer-box">
           <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer"></div>
-          <div className="loading-spinner" id="loadingSpinner"></div> 
-          //Commented out for now loading spinner
+          {loadingStatus && (
+            <div className="loading-overlay">
+              <ClipLoader color={"#123abc"} loading={true} size={50} />
+              <div className="loading-status">
+                {loadingStatus}
+                <div className="loading-statistics">
+                  {statistics.map((stat, index) => (
+                    <div key={index} className="stat-item">
+                      <strong>{stat.type}:</strong><br />
+                      {stat.points && `Points Found: ${stat.points}`}<br />
+                      {stat.sampledPoints && `Sampled Points: ${stat.sampledPoints}`}<br />
+                      {stat.clusters && `Clusters Found: ${stat.clusters}`}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
           {/* Legend Box */}
           <div className="annotation-legend">
             <ul>
