@@ -61,7 +61,7 @@ def upload_image():
             return jsonify({"error": "Unsupported or missing image file"}), 400
 
 def generate_deepzoom(slide, dzi_path, tiles_path):
-    tile_size = 256
+    tile_size = 128
     overlap = 2
     limit_bounds = True
     generator = DeepZoomGenerator(slide, tile_size=tile_size, overlap=overlap, limit_bounds=limit_bounds)
