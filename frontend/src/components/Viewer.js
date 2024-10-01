@@ -370,7 +370,7 @@ const Viewer = ({ dziUrl, filename }) => {
         element: viewerRef.current,
         tileSources: dziUrl,
         showNavigationControl: false,
-        maxZoomPixelRatio: 20,  
+        maxZoomPixelRatio: 15,  
       });
   
       newViewer.addHandler('open', () => {
@@ -495,16 +495,21 @@ useEffect(() => {
       </div>
 
       <div className="zoom-slider-container">
-        <input
+      <input
           id="zoomSlider"
           className="zoom-slider"
           type="range"
-          min={viewer ? viewer.viewport.getMinZoom() : 0.1}
-          max={viewer ? viewer.viewport.getMaxZoom() : 2}
-          step={0.01}
-          value={zoomValue}
+          min={1}
+          max={10}
+          step={1}
+          value={Math.min(zoomValue, 10)}
           onChange={handleZoomChange}
         />
+          <div className="zoom-levels">
+          {Array.from({ length: 10 }, (_, i) => (
+            <span key={i + 1} className="zoom-level">{i + 1}</span>
+          ))}
+                </div>
       </div>
 
       <div className="annotation-toggles">

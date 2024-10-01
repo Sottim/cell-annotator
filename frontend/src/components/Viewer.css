@@ -160,6 +160,7 @@ input[type="file"] {
   display: flex;
   justify-content: center;
   align-items: center;
+  flex-direction: column;
 }
 
 .zoom-slider {
@@ -169,6 +170,27 @@ input[type="file"] {
   border-radius: 10px;
   border: 2px solid #B22222; /* Matches viewer border */
   cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+.zoom-slider:hover {
+  opacity: 1;
+}
+.zoom-levels {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  top: 10px;
+  width: 98.5%;
+  margin-bottom: 12px;
+}
+
+.zoom-level {
+  font-size: 12px;
+  text-align: center;
 }
 
 .zoom-slider::-webkit-slider-thumb {
