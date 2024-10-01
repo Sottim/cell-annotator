@@ -495,6 +495,7 @@ useEffect(() => {
       </div>
 
       <div className="zoom-slider-container">
+        Zoom Level
       <input
           id="zoomSlider"
           className="zoom-slider"

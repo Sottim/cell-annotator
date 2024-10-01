@@ -161,6 +161,7 @@ input[type="file"] {
   justify-content: center;
   align-items: center;
   flex-direction: column;
+  gap: 4px;
 }
 
 .zoom-slider {
