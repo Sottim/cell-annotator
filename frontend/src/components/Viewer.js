@@ -370,6 +370,7 @@ const Viewer = ({ dziUrl, filename }) => {
         element: viewerRef.current,
         tileSources: dziUrl,
         showNavigationControl: false,
+        maxZoomPixelRatio: 20,  
       });
   
       newViewer.addHandler('open', () => {

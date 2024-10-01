@@ -63,7 +63,7 @@ def upload_image():
 def generate_deepzoom(slide, dzi_path, tiles_path):
     tile_size = 256
     overlap = 2
-    limit_bounds = False
+    limit_bounds = True
     generator = DeepZoomGenerator(slide, tile_size=tile_size, overlap=overlap, limit_bounds=limit_bounds)
     
     os.makedirs(tiles_path, exist_ok=True)
