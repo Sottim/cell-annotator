@@ -37,7 +37,6 @@ const Viewer = ({ dziUrl, filename }) => {
   };
 
   const addBlur = () => {
-    setLoadingStatus("Loading")
     const viewerElement = document.getElementById('openseadragon-viewer');
     viewerElement.classList.add('blur');
   };
@@ -107,7 +106,6 @@ const Viewer = ({ dziUrl, filename }) => {
   
   
   const removeBlur = () => {
-    setLoadingStatus("")
     const viewerElement = document.getElementById('openseadragon-viewer');
     viewerElement.classList.remove('blur');
   };
@@ -149,8 +147,27 @@ const Viewer = ({ dziUrl, filename }) => {
     const graphics = annotationGraphicsRef.current;
     graphics.clear();
   
+    // Get the visible annotations within the viewport bounds
+    const getVisibleAnnotationsFromState = () => {
+      const filteredAnnotations = [];
+    
+      annotations.forEach(({ filename, features }) => {
+        if (!visibleAnnotations[filename]) return; // Skip if visibility info is not present for this file
+    
+        const visibleTypes = visibleAnnotations[filename];
+        const visibleFeatures = features.filter(
+          ({ properties }) => visibleTypes[properties.classification.name]
+        );
+    
+        filteredAnnotations.push(...visibleFeatures);
+      });
+    
+      return filteredAnnotations;
+    };
+    
+    const visibleAnnotationsInViewport = getVisibleAnnotations(getVisibleAnnotationsFromState());
+      
     annotations.forEach(({ filename, features }) => {
-      // Check visibility for the entire file
       if (!visibleAnnotations[filename]) return;
   
       const visibleAnnotationTypes = visibleAnnotations[filename];
@@ -159,7 +176,6 @@ const Viewer = ({ dziUrl, filename }) => {
         // Draw clusters if precomputed and available
         if (precomputedClusters[filename]) {
           Object.keys(precomputedClusters[filename]).forEach((type) => {
-            // Check if this annotation type should be visible
             if (!visibleAnnotationTypes[type]) return;
   
             const clusters = precomputedClusters[filename][type];
@@ -189,17 +205,15 @@ const Viewer = ({ dziUrl, filename }) => {
         }
       } else {
         // Draw individual points and polygons if zoomed in
-        features.forEach((annotation) => {
+        visibleAnnotationsInViewport.forEach((annotation) => {
           const { geometry, properties } = annotation;
           if (!geometry || !geometry.coordinates) return;
   
-          const type = properties.classification.name;
-  
-          // Check if this annotation type should be visible
-          if (!visibleAnnotationTypes[type]) return;
-  
           const color = properties.classification.color;
           if (!color) return;
+  
+          const type = properties.classification.name;
+          if (!visibleAnnotationTypes[type]) return;  // Check if the annotation type is visible
   
           const hexColor = (color[0] << 16) + (color[1] << 8) + color[2];
   
@@ -240,6 +254,8 @@ const Viewer = ({ dziUrl, filename }) => {
     setLoadingStatus("");
   };
   
+  
+  
 
   const throttle = (func, limit) => {
     let inThrottle;
@@ -268,6 +284,12 @@ const Viewer = ({ dziUrl, filename }) => {
     }
   };
 
+  function clearGraphics()
+  {
+    const graphics = annotationGraphicsRef.current;
+    graphics.clear(); 
+  }
+
   useEffect(() => {
     if (viewer) {
       const updateZoomValue = () => {
@@ -277,12 +299,16 @@ const Viewer = ({ dziUrl, filename }) => {
   
       viewer.addHandler('zoom', updateZoomValue);
       viewer.addHandler('animation', updateZoomValue);
-      // viewer.addHandler('animation-finish', updateZoomValue);
+      viewer.addHandler('animation', clearGraphics);
+      viewer.addHandler('zoom', clearGraphics);
+      viewer.addHandler('animation-finish', updateZoomValue);
   
       return () => {
         viewer.removeHandler('zoom', updateZoomValue);
         viewer.removeHandler('animation', updateZoomValue);
-        // viewer.removeHandler('animation-finish', updateZoomValue);
+        viewer.removeHandler('animation', clearGraphics);
+        viewer.removeHandler('zoom', clearGraphics);
+        viewer.removeHandler('animation-finish', updateZoomValue);
       };
     }
   }, [viewer]);
@@ -388,19 +414,15 @@ const Viewer = ({ dziUrl, filename }) => {
     });
   };
   
+  
   const handleToggleAnnotation = (filename, type) => {
-    setVisibleAnnotations((prevState) => {
-      // Toggle the visibility of the given type for the given filename
-      const updatedFileAnnotations = {
+    setVisibleAnnotations((prevState) => ({
+      ...prevState,
+      [filename]: {
         ...prevState[filename],
         [type]: !prevState[filename][type],
-      };
-  
-      return {
-        ...prevState,
-        [filename]: updatedFileAnnotations,
-      };
-    });
+      },
+    }));
   };
   
   useEffect(() => {
@@ -417,12 +439,12 @@ const Viewer = ({ dziUrl, filename }) => {
         setZoomValue(newViewer.viewport.getZoom());
         initializePixiApp();
       });
-      // newViewer.addHandler('animation-start', handlePanZoomStart);  
-      // newViewer.addHandler('animation-finish', handlePanZoomEnd);  
+      newViewer.addHandler('animation-start', handlePanZoomStart);  
+      newViewer.addHandler('animation-finish', handlePanZoomEnd);  
   
       return () => {
-        // newViewer.removeHandler('animation-start', handlePanZoomStart);
-        // newViewer.removeHandler('animation-finish', handlePanZoomEnd);
+        newViewer.removeHandler('animation-start', handlePanZoomStart);
+        newViewer.removeHandler('animation-finish', handlePanZoomEnd);
       };
     }
   }, [dziUrl, viewer]);
@@ -453,24 +475,18 @@ const handlePanZoom = () => {
 
 useEffect(() => {
   if (viewer) {
-    // viewer.addHandler('pan', handlePanZoom);
-    // viewer.addHandler('zoom', handlePanZoom);
-    viewer.addHandler('animation-finish', handlePanZoom);
-    viewer.addHandler('animation-start', addBlur); 
-    viewer.addHandler('animation-start', setLoadingStatus("Loading")); 
-    viewer.addHandler('pan', setLoadingStatus("Loading")); 
-
-    
-    viewer.addHandler('animation-finish', removeBlur);
-    viewer.addHandler('animation-finish', setLoadingStatus(""));
-
+    viewer.addHandler('pan', handlePanZoom);
+    viewer.addHandler('zoom', handlePanZoom);
+    viewer.addHandler('animation', handlePanZoom);
+    viewer.addHandler('animation-start', handlePanZoomStart); 
+    viewer.addHandler('animation-finish', handlePanZoomEnd);  
 
     return () => {
-      // viewer.removeHandler('pan', handlePanZoom);
-      // viewer.removeHandler('zoom', handlePanZoom);
-      viewer.removeHandler('animation-finish', handlePanZoom);
-      viewer.removeHandler('animation-start', addBlur); 
-      viewer.removeHandler('animation-finish', removeBlur); 
+      viewer.removeHandler('pan', handlePanZoom);
+      viewer.removeHandler('zoom', handlePanZoom);
+      viewer.removeHandler('animation', handlePanZoom);
+      viewer.removeHandler('animation-start', handlePanZoomStart); 
+      viewer.removeHandler('animation-finish', handlePanZoomEnd); 
     };
   }
 }, [viewer, annotations, visibleAnnotations]);
@@ -520,6 +536,8 @@ const handleMultipleAnnotationUpload = async () => {
   setAnnotationFiles([]); // Clear state after processing
 };
 
+
+
   return (
     <div className="viewer-container">
       <div className="viewer-header">
@@ -528,7 +546,7 @@ const handleMultipleAnnotationUpload = async () => {
       <div className="viewer-wrapper">
         <div className="viewer-box">
           <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer"></div>
-          <div className="loading-spinner-container" id="loadingSpinner" style={{ display: loadingStatus!=="" ? 'block' : 'none' }}>
+          <div className="loading-spinner-container" id="loadingSpinner" style={{ display: loadingStatus ? 'block' : 'none' }}>
           <div className="loading-spinner"></div>
           <div className="loading-status">{loadingStatus}...</div>
         </div>
