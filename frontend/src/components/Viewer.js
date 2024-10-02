@@ -301,6 +301,7 @@ const Viewer = ({ dziUrl, filename }) => {
       viewer.addHandler('animation', updateZoomValue);
       viewer.addHandler('animation', clearGraphics);
       viewer.addHandler('zoom', clearGraphics);
+      viewer.addHandler('pan', clearGraphics);
       viewer.addHandler('animation-finish', updateZoomValue);
   
       return () => {
@@ -308,6 +309,7 @@ const Viewer = ({ dziUrl, filename }) => {
         viewer.removeHandler('animation', updateZoomValue);
         viewer.removeHandler('animation', clearGraphics);
         viewer.removeHandler('zoom', clearGraphics);
+        viewer.removeHandler('pan', clearGraphics);
         viewer.removeHandler('animation-finish', updateZoomValue);
       };
     }
