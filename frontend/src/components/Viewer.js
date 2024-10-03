@@ -38,7 +38,7 @@ const Viewer = ({ dziUrl, filename }) => {
 
   const addBlur = () => {
     const viewerElement = document.getElementById('openseadragon-viewer');
-    viewerElement.classList.add('blur');
+    // viewerElement.classList.add('blur');
   };
 
   const getViewportBounds = () => {
@@ -554,41 +554,67 @@ const handleMultipleAnnotationUpload = async () => {
       </div>
       <div className="viewer-wrapper">
         <div className="viewer-box">
-          <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer"></div>
+          <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer">
           <div className="loading-spinner-container" id="loadingSpinner" style={{ display: loadingStatus ? 'block' : 'none' }}>
           <div className="loading-spinner"></div>
           <div className="loading-status">{loadingStatus}...</div>
         </div>
-        <div className="annotation-legend">
-  <ul>
-    {annotationTypes.map((type) => {
-      let color = null;
-      for (const { features } of annotations) {
-        const feature = features.find((feature) => feature.properties.classification.name === type);
-        if (feature) {
-          color = feature.properties.classification.color;
-          break;
-        }
-      }
+          <div className="annotation-legend">
+            
+      <ul>
+        {annotationTypes.map((type) => {
+          let color = null;
+          for (const { features } of annotations) {
+            const feature = features.find((feature) => feature.properties.classification.name === type);
+            if (feature) {
+              color = feature.properties.classification.color;
+              break;
+            }
+          }
 
-      if (!color) return null;
+          if (!color) return null;
 
-      return (
-        <li key={type} style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-          <span
-            style={{
-              display: 'inline-block',
-              width: '15px',
-              height: '15px',
-              backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
-              marginRight: '10px',
-            }}
-          ></span>
-          {type}
-        </li>
-      );
-    })}
-  </ul>
+          return (
+            <li key={type} style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: '15px',
+                  height: '15px',
+                  backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
+                  marginRight: '10px',
+                }}
+              ></span>
+              {type}
+            </li>
+          );
+        })}
+      </ul>
+        </div>
+          </div>
+        <div className="annotation-toggles">
+  <h3>Toggle Annotations</h3>
+  {annotations.length > 0 ? (
+    annotations.map(({ filename, features }) => (
+      <div key={filename}>
+        <h4>{filename.substring(0,filename.length-8)}</h4>
+        {Object.keys(visibleAnnotations[filename]).map((type) => (
+          <div key={type}>
+            <label>
+              <input
+                type="checkbox"
+                checked={visibleAnnotations[filename][type]}
+                onChange={() => handleToggleAnnotation(filename, type)}
+              />
+              {type}
+            </label>
+          </div>
+        ))}
+      </div>
+    ))
+  ) : (
+    <p>Please Upload Annotations!</p>
+  )}
 </div>
 
 
@@ -613,31 +639,6 @@ const handleMultipleAnnotationUpload = async () => {
           ))}
                 </div>
       </div>
-
-      <div className="annotation-toggles">
-  <h3>Toggle Annotations</h3>
-  {annotations.length > 0 ? (
-    annotations.map(({ filename, features }) => (
-      <div key={filename}>
-        <h4>{filename.substring(0,filename.length-8)}</h4>
-        {Object.keys(visibleAnnotations[filename]).map((type) => (
-          <div key={type}>
-            <label>
-              <input
-                type="checkbox"
-                checked={visibleAnnotations[filename][type]}
-                onChange={() => handleToggleAnnotation(filename, type)}
-              />
-              {type}
-            </label>
-          </div>
-        ))}
-      </div>
-    ))
-  ) : (
-    <p>Please Upload Annotations!</p>
-  )}
-</div>
 
 <div className="upload-section">
   <input type="file" onChange={handleAnnotationFileChange} accept=".json,.geojson" multiple />
