@@ -287,7 +287,9 @@ const Viewer = ({ dziUrl, filename }) => {
   function clearGraphics()
   {
     const graphics = annotationGraphicsRef.current;
-    graphics.clear(); 
+    if(graphics)
+    {graphics.clear(); 
+    }
   }
 
   useEffect(() => {
@@ -433,11 +435,16 @@ const Viewer = ({ dziUrl, filename }) => {
         element: viewerRef.current,
         tileSources: dziUrl,
         showNavigationControl: false,
-        maxZoomPixelRatio: 15,  
+        maxZoomPixelRatio: 15, 
+        minZoomImageRatio:1,
+        minZoomLevel:1,
+        visibilityRatio: 1.0, 
+        constrainDuringPan: true, 
       });
   
       newViewer.addHandler('open', () => {
         setViewer(newViewer);
+        newViewer.viewport.zoomTo(1);
         setZoomValue(newViewer.viewport.getZoom());
         initializePixiApp();
       });
