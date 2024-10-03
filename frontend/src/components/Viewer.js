@@ -619,7 +619,7 @@ const handleMultipleAnnotationUpload = async () => {
   {annotations.length > 0 ? (
     annotations.map(({ filename, features }) => (
       <div key={filename}>
-        <h4>{filename}</h4>
+        <h4>{filename.substring(0,filename.length-8)}</h4>
         {Object.keys(visibleAnnotations[filename]).map((type) => (
           <div key={type}>
             <label>
