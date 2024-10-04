@@ -224,7 +224,7 @@ const Viewer = ({ dziUrl, filename }) => {
               const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
   
               graphics.beginFill(hexColor);
-              graphics.drawCircle(screenPoint.x, screenPoint.y, 3);
+              graphics.drawCircle(screenPoint.x, screenPoint.y, 4);
               graphics.endFill();
             });
           } else if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
@@ -557,7 +557,7 @@ const handleMultipleAnnotationUpload = async () => {
           <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer">
           <div className="loading-spinner-container" id="loadingSpinner" style={{ display: loadingStatus ? 'block' : 'none' }}>
           <div className="loading-spinner"></div>
-          <div className="loading-status">{loadingStatus}...</div>
+          <div className="loading-status">Loading Annotations...</div>
         </div>
           <div className="annotation-legend">
             
