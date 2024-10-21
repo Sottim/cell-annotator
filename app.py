@@ -8,9 +8,15 @@ os.add_dll_directory(r"C:\Program Files (x86)\OpenSlide\bin")  # Replace with th
 import openslide
 from openslide.deepzoom import DeepZoomGenerator
 import json
+from geojson_routes import geojson_blueprint  # Import the GeoJSON routes
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+app.register_blueprint(geojson_blueprint)
 
 @app.route('/')
 def index():
@@ -104,6 +110,15 @@ def upload_annotations():
     file.save(file_path)
     
     return jsonify({"message": "Annotation file uploaded successfully", "filename": filename})
+
+@app.route('/available_images', methods=['GET'])
+def get_available_images():
+    output_folder = 'output'
+    available_files = [
+        f for f in os.listdir(output_folder) if f.endswith('.dzi')
+    ]
+    return jsonify({"images": available_files})
+
 
 @app.route('/output/<path:filename>')
 def output_files(filename):
