@@ -537,39 +537,39 @@ const handleMultipleAnnotationUpload = async () => {
           <div className="loading-spinner"></div>
           <div className="loading-status">Loading Annotations...</div>
         </div>
+          </div>
           <div className="annotation-legend">
             
-      <ul>
-        {annotationTypes.map((type) => {
-          let color = null;
-          for (const { features } of annotations) {
-            const feature = features.find((feature) => feature.properties.classification.name === type);
-            if (feature) {
-              color = feature.properties.classification.color;
-              break;
-            }
-          }
-
-          if (!color) return null;
-
-          return (
-            <li key={type} style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: '15px',
-                  height: '15px',
-                  backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
-                  marginRight: '10px',
-                }}
-              ></span>
-              {type}
-            </li>
-          );
-        })}
-      </ul>
-        </div>
-          </div>
+            <ul>
+              {annotationTypes.map((type) => {
+                let color = null;
+                for (const { features } of annotations) {
+                  const feature = features.find((feature) => feature.properties.classification.name === type);
+                  if (feature) {
+                    color = feature.properties.classification.color;
+                    break;
+                  }
+                }
+      
+                if (!color) return null;
+      
+                return (
+                  <li key={type} style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: '15px',
+                        height: '15px',
+                        backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
+                        marginRight: '10px',
+                      }}
+                    ></span>
+                    {type}
+                  </li>
+                );
+              })}
+            </ul>
+              </div>
         <div className="annotation-toggles">
   <h3>Toggle Annotations</h3>
   {annotations.length > 0 ? (
