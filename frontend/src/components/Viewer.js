@@ -89,8 +89,13 @@ const Viewer = ({ dziUrl, filename }) => {
   };
 
   const addBlur = () => {
+    const graphics = annotationGraphicsRef.current;
+    if(graphics)
+    {
+      graphics.clear();
+    }
     const viewerElement = document.getElementById('openseadragon-viewer');
-    // viewerElement.classList.add('blur');
+    viewerElement.classList.add('blur');
   };
 
   const getViewportBounds = () => {
@@ -188,7 +193,6 @@ const Viewer = ({ dziUrl, filename }) => {
     {
       graphics.clear();
     }
-    console.log('Pan/Zoom started');
     setLoadingStatus("Loading annotations...");
     addBlur();
     showLoadingSpinner();
@@ -198,7 +202,7 @@ const Viewer = ({ dziUrl, filename }) => {
   const ZOOM_THRESHOLD = 6.0;
 
   const drawAnnotationsWithPixi = () => {
-    if (!viewer || !viewer.world || !pixiAppRef.current || !annotationGraphicsRef.current || viewer.viewport.getZoom() <= 5) return;
+    if (!viewer || !viewer.world || !pixiAppRef.current || !annotationGraphicsRef.current || viewer.viewport.getZoom() <= 7) return;
   
     setLoadingStatus("Drawing annotations...");
     let number = 0; // Track the number of annotations drawn
