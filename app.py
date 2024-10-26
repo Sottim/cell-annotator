@@ -4,7 +4,10 @@
 from flask import Flask, request, jsonify, send_from_directory, render_template_string
 from flask_cors import CORS
 import os
-os.add_dll_directory(r"C:\Program Files (x86)\OpenSlide\bin")  # Replace with the directory containing libopenslide-1.dll
+import platform
+if platform.system() == "Windows":
+    os.add_dll_directory(r"C:\Program Files (x86)\OpenSlide\bin")
+
 import openslide
 from openslide.deepzoom import DeepZoomGenerator
 import json
@@ -12,6 +15,7 @@ from geojson_routes import geojson_blueprint  # Import the GeoJSON routes
 from dotenv import load_dotenv
 
 load_dotenv()
+
 
 app = Flask(__name__)
 CORS(app)
