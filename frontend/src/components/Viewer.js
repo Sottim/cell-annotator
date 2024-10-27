@@ -24,7 +24,7 @@ const Viewer = ({ dziUrl, filename }) => {
 
   const fetchAvailableImages = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/available_images');
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/available_images`);
       setAvailableImages(response.data.images);
     } catch (error) {
       console.error('Error fetching available images:', error);
@@ -37,7 +37,7 @@ const Viewer = ({ dziUrl, filename }) => {
 
   const handleImageChange = async (event) => {
     const selectedImage = event.target.value;
-    setCurrentDziUrl(`http://localhost:5000/output/${selectedImage}`); // Update DZI URL
+    setCurrentDziUrl(`${process.env.REACT_APP_BACKEND_URL}/output/${selectedImage}`); // Update DZI URL
   
     const imageFilename = selectedImage.replace('.dzi', ''); // Remove .dzi from the filename
     await fetchLinkedAnnotations(imageFilename); // Fetch linked annotations
@@ -45,13 +45,11 @@ const Viewer = ({ dziUrl, filename }) => {
   
   const fetchLinkedAnnotations = async (imageFilename) => {
     try {
-      const response = await axios.get(`http://localhost:5000/get_annotations_for_dzi/${imageFilename}`);
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/get_annotations_for_dzi/${imageFilename}`);
       if (response.status === 200) {
         const fetchedAnnotations = response.data.annotations;
-        setLinkedAnnotations(fetchedAnnotations); // Store linked annotations in state
-        console.log('Linked annotations fetched:', fetchedAnnotations);
+        setLinkedAnnotations(fetchedAnnotations);
   
-        // Automatically load and display each annotation
         for (const annotation of fetchedAnnotations) {
           await loadAndDisplayAnnotations(annotation.filename);
         }
@@ -349,7 +347,7 @@ const Viewer = ({ dziUrl, filename }) => {
       showLoadingSpinner();
       addBlur();
   
-      const response = await axios.get(`http://localhost:5000/annotations/${annotationFilename}`);
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/annotations/${annotationFilename}`);
       const features = response.data;
   
       // Append the new annotations
@@ -493,7 +491,7 @@ const handleAnnotationUpload = async (file) => {
   formData.append('file', file);
 
   try {
-    await axios.post('http://localhost:5000/upload_annotations', formData, {
+    await axios.post(`${process.env.REACT_APP_BACKEND_URL}/upload_annotations`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
 

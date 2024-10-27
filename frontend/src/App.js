@@ -8,10 +8,11 @@ const App = () => {
   const [filename, setFilename] = useState('');
 
   const handleUploadSuccess = (dziPath) => {
-    const url = `http://localhost:5000/output/${dziPath}`;
+    const url = `${process.env.REACT_APP_BACKEND_URL}/output/${dziPath}`;
     setDziUrl(url);
     setFilename(dziPath.split('.dzi')[0]); // Extract filename without .dzi extension
   };
+  
 
   return (
     <div className='app-container'>
