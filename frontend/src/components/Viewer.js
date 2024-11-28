@@ -14,12 +14,14 @@ const Viewer = ({ dziUrl, filename }) => {
   const pixiAppRef = useRef(null);
   const annotationGraphicsRef = useRef(null);
   const [annotations, setAnnotations] = useState([]); // Holds multiple annotation datasets
-  const [visibleAnnotations, setVisibleAnnotations] = useState({}); // Track visibility for each annotation set
+  const [visibleAnnotations, setVisibleAnnotations] = useState({});
   const [annotationFiles, setAnnotationFiles] = useState([]); // Store the uploaded annotation files
   const [linkedAnnotations, setLinkedAnnotations] = useState([]); // State for linked annotations
   const [availableImages, setAvailableImages] = useState([]); // Store available images
   const [selectedImage, setSelectedImage] = useState(filename || ''); // Track selected image
   const [currentDziUrl, setCurrentDziUrl] = useState(dziUrl); // Manage the selected DZI URL
+  const [annotationsByFile, setAnnotationsByFile] = useState({}); // Store annotations grouped by filename
+  const [notification, setNotification] = useState('');
 
 
   const fetchAvailableImages = async () => {
@@ -37,36 +39,20 @@ const Viewer = ({ dziUrl, filename }) => {
 
   const handleImageChange = async (event) => {
     const selectedImage = event.target.value;
+    setSelectedImage(selectedImage); // Update filename
     setCurrentDziUrl(`${process.env.REACT_APP_BACKEND_URL}/output/${selectedImage}`); // Update DZI URL
   
     const imageFilename = selectedImage.replace('.dzi', ''); // Remove .dzi from the filename
-    await fetchLinkedAnnotations(imageFilename); // Fetch linked annotations
-  };
-  
-  const fetchLinkedAnnotations = async (imageFilename) => {
-    try {
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/get_annotations_for_dzi/${imageFilename}`);
-      if (response.status === 200) {
-        const fetchedAnnotations = response.data.annotations;
-        setLinkedAnnotations(fetchedAnnotations);
-  
-        for (const annotation of fetchedAnnotations) {
-          await loadAndDisplayAnnotations(annotation.filename);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching linked annotations:', error);
+    const bounds = getViewportBounds();
+    if(bounds)
+    {
+      await fetchNormalizedAnnotations(bounds, imageFilename); // Fetch linked annotations
     }
   };
   
   
-
-  useEffect(() => {
-    if (filename) {
-      const imageFilename = filename.replace('.dzi', ''); // Remove .dzi from the filename
-      fetchLinkedAnnotations(imageFilename);  // Fetch linked annotations when DZI file is loaded
-    }
-  }, [filename, currentDziUrl]);
+  
+  
 
   const initializePixiApp = () => {
     const canvas = document.createElement('canvas');
@@ -87,6 +73,7 @@ const Viewer = ({ dziUrl, filename }) => {
   };
 
   const addBlur = () => {
+    showLoadingSpinner()
     const graphics = annotationGraphicsRef.current;
     if(graphics)
     {
@@ -110,52 +97,54 @@ const Viewer = ({ dziUrl, filename }) => {
     };
   };
   
-  const getVisibleAnnotations = (annotations) => {
-    const bounds = getViewportBounds();
-    if (!bounds) return [];
+  const fetchNormalizedAnnotations = async (bounds, filename) => {
+    const currentZoom = viewer.viewport.getZoom();
   
-    return annotations.map((annotation) => {
-      const { geometry } = annotation;
-      if (!geometry || !geometry.coordinates) return null;
+    if (currentZoom <= 7) {
+      setNotification('Zoom in to view annotations.');
+      return;
+    }
   
-      let filteredGeometry = { ...geometry };
+    try {
+      addBlur();
+      const response = await axios.post(
+        `${process.env.REACT_APP_BACKEND_URL}/get_normalized_annotations`,
+        { bounds, filename }
+      );
   
-      if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
-        filteredGeometry.coordinates = geometry.coordinates.map((polygon) => {
-          return polygon.map((ring) => {
-            return ring.filter(([x, y]) => {
-              return (
-                x >= bounds.xMin &&
-                x <= bounds.xMax &&
-                y >= bounds.yMin &&
-                y <= bounds.yMax
-              );
-            });
-          }).filter((ring) => ring.length > 0);
-        }).filter((polygon) => polygon.length > 0);
-      } else if (geometry.type === 'Point' || geometry.type === 'MultiPoint') {
-        filteredGeometry.coordinates = geometry.coordinates.filter(([x, y]) => {
-          return (
-            x >= bounds.xMin &&
-            x <= bounds.xMax &&
-            y >= bounds.yMin &&
-            y <= bounds.yMax
-          );
-        });
+      const data = response.data;
+      if (!data || Object.keys(data).length === 0) {
+        setNotification('No annotations visible in the current viewport.');
+        return;
       }
   
-      return filteredGeometryHasData(filteredGeometry) ? { ...annotation, geometry: filteredGeometry } : null;
-    }).filter((annotation) => annotation !== null);
+      setAnnotationsByFile(data); // Group annotations by filename
+      setNotification(''); // Clear notification if annotations are found
+      removeBlur();
+      return data;
+    } catch (error) {
+      console.error("Error fetching normalized annotations:", error);
+      setNotification('Error fetching annotations. Please try again.');
+      return {};
+    }
   };
+  
+  
+  
+  
+  
   
   const filteredGeometryHasData = (geometry) => {
     if (!geometry.coordinates) return false;
-    if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
-      return geometry.coordinates.length > 0 && geometry.coordinates.some(polygon => polygon.length > 0);
+  
+    if (geometry.type === "Polygon" || geometry.type === "MultiPolygon") {
+      return geometry.coordinates.length > 0 && geometry.coordinates.some((ring) => ring.length > 0);
     }
-    if (geometry.type === 'Point' || geometry.type === 'MultiPoint') {
+  
+    if (geometry.type === "Point" || geometry.type === "MultiPoint") {
       return geometry.coordinates.length > 0;
     }
+  
     return false;
   };
   
@@ -166,116 +155,138 @@ const Viewer = ({ dziUrl, filename }) => {
   };
 
   const showLoadingSpinner = () => {
-    setLoadingStatus("Loading annotations");
-    setTimeout(() => {
-      const spinnerContainer = document.getElementById('loadingSpinner');
-      if (spinnerContainer) {
-        spinnerContainer.style.display = 'block';
-      }
-    }, 0);
+    setLoadingStatus(true);
+    const spinnerContainer = document.getElementsByClassName('loading-spinner');
+    if (spinnerContainer.length > 0) {
+      spinnerContainer[0].style.display = 'block'; // Access the first element
+    } else {
+      console.warn("Spinner container not found");
+    }
   };
   
-  
   const hideLoadingSpinner = () => {
-    setLoadingStatus("Loading annotations");
-    const spinnerContainer = document.getElementById('loadingSpinner');
-    if (spinnerContainer) {
-      spinnerContainer.style.display = 'none';
+    setLoadingStatus(false);
+    const spinnerContainer = document.getElementsByClassName('loading-spinner');
+    if (spinnerContainer.length > 0) {
+      spinnerContainer[0].style.display = 'none'; // Access the first element
+    } else {
+      console.warn("Spinner container not found");
     }
   };
   
 
   const handlePanZoomStart = () => {
+    showLoadingSpinner();
+    setAnnotationsByFile({});
     const graphics = annotationGraphicsRef.current;
     if(graphics)
     {
       graphics.clear();
     }
-    setLoadingStatus("Loading annotations...");
-    addBlur();
-    showLoadingSpinner();
   };
-  
-
-  const ZOOM_THRESHOLD = 6.0;
-
   const drawAnnotationsWithPixi = () => {
-    if (!viewer || !viewer.world || !pixiAppRef.current || !annotationGraphicsRef.current || viewer.viewport.getZoom() <= 7) return;
+    if (!viewer || !pixiAppRef.current) {
+      console.warn("Viewer or PixiJS is not initialized.");
+      return;
+    }
   
-    setLoadingStatus("Drawing annotations...");
-    let number = 0; // Track the number of annotations drawn
-    const graphics = annotationGraphicsRef.current;
-    graphics.clear(); // Clear previous drawings
+    const currentZoom = viewer.viewport.getZoom();
+    if (currentZoom <= 7) {
+      pixiAppRef.current.stage.removeChildren(); // Clear all drawings
+      pixiAppRef.current.renderer.render(pixiAppRef.current.stage);
+      return;
+    }
   
-    // Get the visible annotations within the viewport bounds
-    const getVisibleAnnotationsFromState = () => {
-      const filteredAnnotations = [];
-      
-      annotations.forEach(({ filename, features }) => {
-        if (!visibleAnnotations[filename]) return; // Skip if visibility info is not present for this file
-        
-        const visibleTypes = visibleAnnotations[filename];
-        const visibleFeatures = features.filter(
-          ({ properties }) => visibleTypes[properties.classification.name]
-        );
-        
-        filteredAnnotations.push(...visibleFeatures);
-      });
   
-      return filteredAnnotations;
-    };
+    // Clear previous annotations for all types
+    pixiAppRef.current.stage.removeChildren();
   
-    const visibleAnnotationsInViewport = getVisibleAnnotations(getVisibleAnnotationsFromState());
+    // Iterate through annotations grouped by filename
+    Object.entries(annotationsByFile).forEach(([filename, annotationGroup]) => {
+      const fileVisibility = visibleAnnotations[filename];
+      if (!fileVisibility) return; // Skip if no visibility settings for this file
   
-    // Draw individual points and polygons
-    visibleAnnotationsInViewport.forEach((annotation) => {
-      const { geometry, properties } = annotation;
-      if (!geometry || !geometry.coordinates) return;
+      // Log annotation file processing
   
-      const color = properties.classification.color;
-      if (!color) return;
+      // Draw each annotation
+      annotationGroup.forEach((annotation, annotationIndex) => {
+        const { geometry, properties } = annotation;
   
-      const type = properties.classification.name;
-      const hexColor = (color[0] << 16) + (color[1] << 8) + color[2]; // Convert color to hex
+        if (!geometry || !filteredGeometryHasData(geometry)) {
+          console.warn(`Annotation ${annotationIndex} skipped: Invalid or empty geometry.`, annotation);
+          return;
+        }
   
-      if (geometry.type === 'Point' || geometry.type === 'MultiPoint') {
-        // Draw points
-        geometry.coordinates.forEach(([x, y]) => {
-          const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
-          const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
+        // Log geometry type
   
-          graphics.beginFill(hexColor);
-          graphics.drawCircle(screenPoint.x, screenPoint.y, 4);
-          graphics.endFill();
-          number++;
-        });
-      } else if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
-        // Draw polygons
-        geometry.coordinates.forEach((polygon) => {
-          polygon.forEach((ring) => {
-            graphics.beginFill(hexColor, 0.6); // Set fill color with transparency for polygons
-            ring.forEach(([x, y], index) => {
-              const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
-              const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
-              if (index === 0) {
-                graphics.moveTo(screenPoint.x, screenPoint.y);
-              } else {
-                graphics.lineTo(screenPoint.x, screenPoint.y);
-              }
+        // Check if the annotation type is visible
+        const annotationType = properties.classification.name;
+        const isVisible = fileVisibility[annotationType];
+        if (!isVisible) {
+          return;
+        }
+  
+        // Ensure the annotation has valid color information
+        const color = properties?.classification?.color;
+        if (!color) {
+          console.warn(`Annotation ${annotationIndex} skipped: Missing color information.`, annotation);
+          return;
+        }
+  
+        // Create a new Graphics object for this annotation type
+        const graphics = new PIXI.Graphics();
+  
+        // Convert RGB color to hexadecimal
+        const hexColor = (color[0] << 16) + (color[1] << 8) + color[2];
+  
+        if (geometry.type === "Polygon" || geometry.type === "MultiPolygon") {
+          // Handle Polygon and MultiPolygon
+          geometry.coordinates.forEach((polygon, polygonIndex) => {
+  
+            polygon.forEach((ring, ringIndex) => {
+  
+              graphics.beginFill(hexColor, 0.6); // Add fill color with transparency
+              ring.forEach(([x, y], pointIndex) => {
+                const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
+                const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
+  
+
+  
+                if (pointIndex === 0) {
+                  graphics.moveTo(screenPoint.x, screenPoint.y);
+                } else {
+                  graphics.lineTo(screenPoint.x, screenPoint.y);
+                }
+              });
+  
+              graphics.closePath();
+              graphics.endFill(); // Close the fill
             });
-            graphics.closePath(); // Close the polygon path
-            graphics.endFill();
-            number++;
           });
-        });
-      }
+        } else if (geometry.type === "Point" || geometry.type === "MultiPoint") {
+          // Draw points
+          geometry.coordinates.forEach(([x, y]) => {
+            const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
+            const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
+  
+            graphics.beginFill(hexColor);
+            graphics.drawCircle(screenPoint.x, screenPoint.y, 4); // Adjust radius as needed
+            graphics.endFill();
+          });
+        } else {
+          console.warn(`Unsupported geometry type: ${geometry.type}`);
+        }
+  
+        // Add graphics to the stage
+        pixiAppRef.current.stage.addChild(graphics);
+        hideLoadingSpinner();
+      });
     });
   
-    // Render the updated graphics
     pixiAppRef.current.renderer.render(pixiAppRef.current.stage);
-    setLoadingStatus(""); // Clear the loading status
-    console.log(`Number of annotations drawn: ${number}`);
   };
+  
+  
   
   
   
@@ -294,20 +305,43 @@ const Viewer = ({ dziUrl, filename }) => {
     };
   };
   
-  const handlePanZoomEnd = throttle(() => {
-    removeBlur();
-    hideLoadingSpinner();
-    drawAnnotationsWithPixi(); 
-  }, 200); 
+  const handlePanZoomEnd = async () => {
+    setLoadingStatus(false);
+    const currentZoom = viewer ? viewer.viewport.getZoom() : 0;
   
-    const updatePixiAppSize = () => {
-    if (pixiAppRef.current && viewerRef.current) {
-      const app = pixiAppRef.current;
-      app.renderer.resize(viewerRef.current.clientWidth, viewerRef.current.clientHeight);
+    if (currentZoom <= 7) {
+      setNotification('Zoom in to load annotations.');
+      return;
+    }
+    else{
+      setNotification('Loading Annotations...');
+    }
+  
+    const bounds = getViewportBounds();
+    if (!bounds || !selectedImage) return;
+  
+    removeBlur();
+  
+    try {
+      const annotationsByFile = await fetchNormalizedAnnotations(bounds, selectedImage);
+      setAnnotations((prevAnnotations) => {
+        const uniqueAnnotations = new Map(prevAnnotations.map((a) => [a.id, a]));
+  
+        Object.entries(annotationsByFile).forEach(([filename, annotationGroup]) => {
+          annotationGroup.forEach((annotation) => {
+            uniqueAnnotations.set(annotation.id, annotation);
+          });
+        });
+        return Array.from(uniqueAnnotations.values());
+      });
+      setNotification(''); // Clear notification if annotations are found
       drawAnnotationsWithPixi();
+    } catch (error) {
+      console.error("Error during pan/zoom end handling:", error);
     }
   };
-
+  
+  
   function clearGraphics()
   {
     const graphics = annotationGraphicsRef.current;
@@ -329,6 +363,7 @@ const Viewer = ({ dziUrl, filename }) => {
       viewer.addHandler('zoom', clearGraphics);
       viewer.addHandler('pan', clearGraphics);
       viewer.addHandler('animation-finish', updateZoomValue);
+      viewer.addHandler('animation-finish', hideLoadingSpinner);
   
       return () => {
         viewer.removeHandler('zoom', updateZoomValue);
@@ -341,56 +376,26 @@ const Viewer = ({ dziUrl, filename }) => {
     }
   }, [viewer]);
 
-  const loadAndDisplayAnnotations = async (annotationFilename) => {
-    try {
-      console.log("Starting to load annotations...");
-      showLoadingSpinner();
-      addBlur();
-  
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/annotations/${annotationFilename}`);
-      const features = response.data;
-  
-      // Append the new annotations
-      setAnnotations((prevAnnotations) => [
-        ...prevAnnotations,
-        { filename: annotationFilename, features }
-      ]);
-  
-      // Update visibility for each annotation type of the new file
-      const uniqueTypes = [...new Set(features.map((feature) => feature.properties.classification.name))];
-      setVisibleAnnotations((prevVisible) => ({
-        ...prevVisible,
-        [annotationFilename]: uniqueTypes.reduce((acc, type) => ({ ...acc, [type]: true }), {})
-      }));
-  
-      setAnnotationTypes((prevTypes) => Array.from(new Set([...prevTypes, ...uniqueTypes])));
-  
-      console.log("Annotations loaded successfully.");
-  
-      if (viewer) {
-        updatePixiAppSize(); // Ensure the Pixi app matches the viewer size
-      }
-  
-      hideLoadingSpinner();
-      removeBlur();
-    } catch (error) {
-      console.error('Error loading annotations:', error);
-      hideLoadingSpinner();
-      removeBlur();
-    }
-  };
-  
-  
-  
   const [loadingStatus, setLoadingStatus] = useState("");
-
+  useEffect(() => {
+    const initialVisibility = {};
+    Object.entries(annotationsByFile).forEach(([filename, annotationGroup]) => {
+      initialVisibility[filename] = {};
+      annotationGroup.forEach(({ properties }) => {
+        const type = properties.classification.name;
+        initialVisibility[filename][type] = false; 
+      });
+    });
+    setVisibleAnnotations(initialVisibility);
+  }, [annotationsByFile]);
+  
   
   const handleToggleAnnotation = (filename, type) => {
     setVisibleAnnotations((prevState) => ({
       ...prevState,
       [filename]: {
         ...prevState[filename],
-        [type]: !prevState[filename][type],
+        [type]: !(prevState[filename]?.[type] || false), // Toggle visibility
       },
     }));
   };
@@ -477,7 +482,7 @@ const handleAnnotationFileChange = (event) => {
     const filesArray = Array.from(event.target.files);
     setAnnotationFiles(filesArray); // Set files in state
   } else {
-    console.warn("No files selected");
+    console.warn('No files selected');
   }
 };
 
@@ -486,16 +491,15 @@ const handleAnnotationUpload = async (file) => {
     alert('Please select an annotation file first!');
     return;
   }
-
+  const dziFilenameWithoutExtension = selectedImage.replace('.dzi', '');
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('dziFile', dziFilenameWithoutExtension);
+
 
   try {
-    await axios.post(`${process.env.REACT_APP_BACKEND_URL}/upload_annotations`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-
-    await loadAndDisplayAnnotations(file.name);
+    await axios.post(`${process.env.REACT_APP_BACKEND_URL}/link_annotation_to_dzi`, formData);
+    alert(`Successfully uploaded annotation ${file.name}`);
   } catch (error) {
     console.error('Error uploading annotation file:', error);
   }
@@ -511,7 +515,8 @@ const handleMultipleAnnotationUpload = async () => {
     await handleAnnotationUpload(file);
   }
 
-  setAnnotationFiles([]); // Clear state after processing
+  setAnnotationFiles([]); // Clear state
+  document.querySelector('input[type="file"]').value = ''; // Clear file input
 };
 
 
@@ -534,68 +539,68 @@ const handleMultipleAnnotationUpload = async () => {
       </div>
       <div className="viewer-wrapper">
         <div className="viewer-box">
+         {notification!=='' && <div className="loading-spinner" id="loadingSpinner"></div>}
           <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer">
-          <div className="loading-spinner-container" id="loadingSpinner" style={{ display: loadingStatus ? 'block' : 'none' }}>
-          <div className="loading-spinner"></div>
-          <div className="loading-status">Loading Annotations...</div>
-        </div>
           </div>
           <div className="annotation-legend">
             
-            <ul>
-              {annotationTypes.map((type) => {
-                let color = null;
-                for (const { features } of annotations) {
-                  const feature = features.find((feature) => feature.properties.classification.name === type);
-                  if (feature) {
-                    color = feature.properties.classification.color;
-                    break;
-                  }
-                }
-      
-                if (!color) return null;
-      
-                return (
-                  <li key={type} style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                    <span
-                      style={{
-                        display: 'inline-block',
-                        width: '15px',
-                        height: '15px',
-                        backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
-                        marginRight: '10px',
-                      }}
-                    ></span>
-                    {type}
-                  </li>
-                );
-              })}
-            </ul>
+          <ul>
+  {annotationTypes.map((type) => {
+    let color = null;
+
+    for (const annotation of annotations) {
+      const features = annotation.features || []; // Default to an empty array if `features` is undefined
+      const feature = features.find((feature) => feature.properties.classification.name === type);
+
+      if (feature) {
+        color = feature.properties.classification.color;
+        break;
+      }
+    }
+
+    if (!color) return null;
+
+    return (
+      <li key={type} style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+        <span
+          style={{
+            display: 'inline-block',
+            width: '15px',
+            height: '15px',
+            backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
+            marginRight: '10px',
+          }}
+        ></span>
+        {type}
+      </li>
+    );
+  })}
+</ul>
+
               </div>
-        <div className="annotation-toggles">
-  <h3>Toggle Annotations</h3>
-  {annotations.length > 0 ? (
-    annotations.map(({ filename, features }) => (
-      <div key={filename}>
-        <h4>{filename.substring(0,filename.length-8)}</h4>
-        {Object.keys(visibleAnnotations[filename]).map((type) => (
-          <div key={type}>
-            <label>
-              <input
-                type="checkbox"
-                checked={visibleAnnotations[filename][type]}
-                onChange={() => handleToggleAnnotation(filename, type)}
-              />
-              {type}
-            </label>
-          </div>
-        ))}
-      </div>
-    ))
-  ) : (
-    <p>Please Upload Annotations!</p>
-  )}
+            <div className="annotation-toggles">
+  <h3>Toggle Annotations</h3>{notification && <div><p style={{color:"Orange", fontWeight:"Bold"}}>Current Status: </p><p>{notification}</p></div>}
+  {Object.entries(annotationsByFile).map(([filename, annotationGroup]) => (
+    <div key={filename}>
+      <h4>{filename.replace('.json', '')}</h4>
+      {annotationGroup.map(({ properties }, index) => (
+        <div key={index}>
+          <label>
+            <input
+              type="checkbox"
+              checked={visibleAnnotations[filename]?.[properties.classification.name] || false}
+              onChange={() => handleToggleAnnotation(filename, properties.classification.name)}
+            />
+            {properties.classification.name}
+          </label>
+        </div>
+      ))}
+    </div>
+  ))}
 </div>
+
+
+
 
 
         </div>
@@ -619,26 +624,24 @@ const handleMultipleAnnotationUpload = async () => {
           ))}
                 </div>
       </div>
-
-<div className="upload-section">
-  <input type="file" onChange={handleAnnotationFileChange} accept=".json,.geojson" multiple />
-  <button onClick={handleMultipleAnnotationUpload} className="upload-btn">
-    Upload Annotations
-  </button>
-</div>
-<AnnotationUploader dziFilename={filename} />
-    {linkedAnnotations.length > 0 && (
-                <div className="linked-annotations-section">
-                  <h3>Linked Annotations for DZI: {filename}</h3>
-                  <ul>
-                    {linkedAnnotations.map((annotation, index) => (
-                      <li key={index}>
-                        <span>{annotation.filename}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+      <div className="upload-section">
+        <input type="file" onChange={handleAnnotationFileChange} accept=".json,.geojson" multiple />
+        <button onClick={handleMultipleAnnotationUpload} className="upload-btn">
+          Upload Annotations
+        </button>
+      </div>
+      {linkedAnnotations.length > 0 && (
+        <div className="linked-annotations-section">
+          <h3>Linked Annotations for DZI: {filename}</h3>
+          <ul>
+            {linkedAnnotations.map((annotation, index) => (
+              <li key={index}>
+                <span>{annotation.filename}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 };
