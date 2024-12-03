@@ -41,6 +41,7 @@
   align-items: center;
   gap: 32px;
   flex-grow: 1;
+  margin-top: 24px;
 }
 
 .wsi-viewer {

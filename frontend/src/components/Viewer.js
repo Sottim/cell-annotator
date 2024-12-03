@@ -4,7 +4,7 @@ import axios from 'axios';
 import * as PIXI from 'pixi.js';
 import { Application } from 'pixi.js';
 import './Viewer.css'; 
-import AnnotationUploader from './AnnotationUploader';  
+import ClinicalData from './ClinicalData';
 
 const Viewer = ({ dziUrl, filename }) => {
   const viewerRef = useRef(null);
@@ -22,6 +22,7 @@ const Viewer = ({ dziUrl, filename }) => {
   const [currentDziUrl, setCurrentDziUrl] = useState(dziUrl); // Manage the selected DZI URL
   const [annotationsByFile, setAnnotationsByFile] = useState({}); // Store annotations grouped by filename
   const [notification, setNotification] = useState('');
+  const [clinicalData, setClinicalData] = useState("No Clinical Data Available"); // State for clinical data
 
 
   const fetchAvailableImages = async () => {
@@ -604,7 +605,7 @@ const handleMultipleAnnotationUpload = async () => {
 
         </div>
       </div>
-
+      <ClinicalData data={clinicalData} />
       <div className="zoom-slider-container">
         Zoom Level
       <input
