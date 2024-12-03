@@ -94,27 +94,6 @@ def generate_deepzoom(slide, dzi_path, tiles_path):
 
     print(f"DZI and tiles created successfully: {dzi_path}")
 
-@app.route('/annotations/<filename>', methods=['GET'])
-def get_annotations(filename):
-    annotations_path = os.path.join('annotations', filename)
-    if os.path.exists(annotations_path):
-        with open(annotations_path, 'r') as f:
-            annotations = json.load(f)
-        return jsonify(annotations)
-    else:
-        return jsonify({"error": "Annotation file not found"}), 404
-
-@app.route('/upload_annotations', methods=['POST'])
-def upload_annotations():
-    file = request.files['file']
-    filename = file.filename
-    file_path = os.path.join('annotations', filename)
-    
-    os.makedirs('annotations', exist_ok=True)
-    file.save(file_path)
-    
-    return jsonify({"message": "Annotation file uploaded successfully", "filename": filename})
-
 @app.route('/available_images', methods=['GET'])
 def get_available_images():
     output_folder = 'output'

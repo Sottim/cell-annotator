@@ -99,17 +99,16 @@ const Viewer = ({ dziUrl, filename }) => {
   
   const fetchNormalizedAnnotations = async (bounds, filename) => {
     const currentZoom = viewer.viewport.getZoom();
-  
     if (currentZoom <= 7) {
       setNotification('Zoom in to view annotations.');
       return;
     }
-  
+    const actualFilename = filename.replace('.dzi','')
     try {
       addBlur();
       const response = await axios.post(
         `${process.env.REACT_APP_BACKEND_URL}/get_normalized_annotations`,
-        { bounds, filename }
+        { bounds, filename:actualFilename }
       );
   
       const data = response.data;
