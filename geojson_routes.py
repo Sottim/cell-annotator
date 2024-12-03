@@ -60,26 +60,71 @@ def get_geojson_annotations():
     result = [{"filename": doc["filename"], "geojson": doc["geojson"]} for doc in annotations]
     return jsonify(result), 200
 
-@geojson_blueprint.route('/get_annotations_for_dzi/<dzi_filename>', methods=['GET'])
-def get_annotations_for_dzi(dzi_filename):
-    # Query MongoDB for annotations linked to the provided DZI file
-    annotations = geojson_collection.find({"dzi_file": dzi_filename})
+@geojson_blueprint.route('/get_normalized_annotations', methods=['POST'])
+def get_normalized_annotations():
+    data = request.json
+    bounds = data.get('bounds')
+    filename = data.get('filename')
 
-    # Convert annotations to a list
-    annotations_list = []
-    for annotation in annotations:
-        annotations_list.append({
-            "filename": annotation['filename'],
-            "geojson": annotation['geojson']
-        })
+    if not bounds or not filename:
+        return jsonify({"error": "Bounds and filename are required"}), 400
 
-    if len(annotations_list) == 0:
-        return jsonify({"message": "No annotations linked to this DZI file."}), 404
+    filename = filename[:-4] if filename.endswith('.dzi') else filename
 
-    return jsonify({"annotations": annotations_list}), 200
+    x_min = round(bounds.get('xMin', 6), 6)
+    x_max = round(bounds.get('xMax', 6), 6)
+    y_min = round(bounds.get('yMin', 6), 6)
+    y_max = round(bounds.get('yMax', 6), 6)
+
+    try:
+        query = {"dzi_file": filename}
+        matching_documents = list(geojson_collection.find(query))
+
+        grouped_annotations = {}
+        for doc in matching_documents:
+            geojson_data = doc.get('geojson', [])
+            filtered_features = []
+
+            for feature in geojson_data:
+                geometry = feature.get('geometry', {})
+                coordinates = geometry.get('coordinates', [])
+
+                if geometry.get('type') in ['Point', 'MultiPoint']:
+                    filtered_points = [
+                        point for point in coordinates
+                        if x_min <= point[0] <= x_max and y_min <= point[1] <= y_max
+                    ]
+                    if filtered_points:
+                        feature['geometry']['coordinates'] = filtered_points
+                        filtered_features.append(feature)
+
+                elif geometry.get('type') in ['Polygon', 'MultiPolygon']:
+                    filtered_polygons = []
+                    for polygon in coordinates:
+                        filtered_rings = [
+                            [point for point in ring if x_min <= point[0] <= x_max and y_min <= point[1] <= y_max]
+                            for ring in polygon
+                        ]
+                        filtered_rings = [ring for ring in filtered_rings if ring]
+                        if filtered_rings:
+                            filtered_polygons.append(filtered_rings)
+                    if filtered_polygons:
+                        feature['geometry']['coordinates'] = filtered_polygons
+                        filtered_features.append(feature)
+
+            # Group annotations by filename
+            grouped_annotations[doc["filename"]] = filtered_features
+
+        return jsonify(grouped_annotations), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @geojson_blueprint.route('/link_annotation_to_dzi', methods=['POST'])
 def link_annotation_to_dzi():
+    print(request.files)
+    print(request.form)
+
     file = request.files['file']
     filename = file.filename
     dzi_file = request.form.get('dziFile')  # Get the associated DZI file
