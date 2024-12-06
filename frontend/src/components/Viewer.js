@@ -4,7 +4,6 @@ import axios from 'axios';
 import * as PIXI from 'pixi.js';
 import { Application } from 'pixi.js';
 import './Viewer.css'; 
-import ClinicalData from './ClinicalData';
 import * as h3 from 'h3-js';
 
 
@@ -24,7 +23,6 @@ const Viewer = ({ dziUrl, filename }) => {
   const [currentDziUrl, setCurrentDziUrl] = useState(dziUrl); // Manage the selected DZI URL
   const [annotationsByFile, setAnnotationsByFile] = useState({}); // Store annotations grouped by filename
   const [notification, setNotification] = useState('');
-  const [clinicalData, setClinicalData] = useState("No Clinical Data Available"); // State for clinical data
   const hexBinsRef = useRef([]);
 
 
@@ -55,8 +53,9 @@ const Viewer = ({ dziUrl, filename }) => {
   
   
   const renderHexBins = () => {
-    console.log("Starting renderHexBins...");
-    
+    if (zoomValue > 7) {
+      return; // Skip rendering hex bins
+    }
     if (!pixiAppRef.current || !viewer) {
       console.warn("PixiJS or Viewer is not initialized.");
       return;
@@ -66,13 +65,10 @@ const Viewer = ({ dziUrl, filename }) => {
     if (!Array.isArray(hexBins) || hexBins.length === 0) {
       console.warn("HexBins is not valid or empty:", hexBins);
       return;
-    }
-  
-    console.log(`Hexbin : ${hexBins}`);
-  
+    }  
     // Create a new Graphics object
     const graphics = new PIXI.Graphics();
-  
+    setNotification('Zoom in to view individual annotations.');
     hexBins.forEach((bin) => {
       const { image_coordinates, classifications } = bin;
   
@@ -109,12 +105,9 @@ const Viewer = ({ dziUrl, filename }) => {
       graphics.endFill();
     });
   
-    console.log("Adding graphics to PixiJS stage...");
     pixiAppRef.current.stage.addChild(graphics);
   
-    console.log("Rendering PixiJS stage...");
     pixiAppRef.current.renderer.render(pixiAppRef.current.stage);
-    console.log("Hexbins rendered successfully.");
   };
   const calculateGradientColor = (classifications) => {
     let totalWeight = 0;
@@ -139,57 +132,6 @@ const Viewer = ({ dziUrl, filename }) => {
     // Convert RGB to hexadecimal
     return (red << 16) + (green << 8) + blue;
   };
-    
-  
-  
-  const latLonToImageCoordinates = (lat, lon, imageWidth, imageHeight) => {
-    // Convert lat/lon to image coordinates without clamping
-    const x = ((lon + 180) / 360) * imageWidth;
-    const y = ((lat + 90) / 180) * imageHeight;
-  
-    console.log(`Lat/Lon (${lat}, ${lon}) -> Image Coords (${x}, ${y})`);
-    return [x, y];
-  };
-  
-  
-  
-  
-  
-  const drawDebugOverlay = () => {
-    if (!pixiAppRef.current || !viewer) {
-      console.warn("PixiJS or Viewer is not initialized.");
-      return;
-    }
-    console.log("Drawing debug overlay...");
-  
-    const graphics = new PIXI.Graphics();
-    graphics.beginFill(0xff0000, 1); // Red with transparency
-  
-    // Draw markers at known positions (corners of the image)
-    const imageCorners = [
-      [0, 0], // Top-left
-      [viewer.source.dimensions.x, 0], // Top-right
-      [viewer.source.dimensions.x, viewer.source.dimensions.y], // Bottom-right
-      [0, viewer.source.dimensions.y], // Bottom-left
-    ];
-  
-    imageCorners.forEach(([x, y]) => {
-      const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
-      const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
-  
-      graphics.drawCircle(screenPoint.x, screenPoint.y, 10); // Circle marker
-    });
-  
-    graphics.endFill();
-    pixiAppRef.current.stage.addChild(graphics);
-    pixiAppRef.current.renderer.render(pixiAppRef.current.stage);
-  };
-  
-  
-  
-  
-  
-
   const initializePixiApp = () => {
     const canvas = document.createElement('canvas');
     const view = canvas.transferControlToOffscreen();
@@ -198,16 +140,25 @@ const Viewer = ({ dziUrl, filename }) => {
   
     app.init({
       view,
-      backgroundAlpha: 0,  
-      resizeTo: viewerRef.current, 
+      backgroundAlpha: 0,
+      resizeTo: viewerRef.current,
     }).then(() => {
-      viewerRef.current.appendChild(canvas); 
+      viewerRef.current.appendChild(canvas);
       pixiAppRef.current = app;
-      annotationGraphicsRef.current = new PIXI.Graphics();
-      app.stage.addChild(annotationGraphicsRef.current);
-      drawDebugOverlay();
-    }).catch(err => console.error("PixiJS Initialization error: ", err));
+  
+      // Separate layers for hex bins and annotations
+      const hexBinGraphics = new PIXI.Graphics();
+      const annotationGraphics = new PIXI.Graphics();
+  
+      app.stage.addChild(hexBinGraphics);
+      app.stage.addChild(annotationGraphics);
+  
+      annotationGraphicsRef.current = annotationGraphics;
+      hexBinsRef.current = hexBinGraphics;
+  
+    }).catch((err) => console.error("PixiJS Initialization error: ", err));
   };
+  
 
   const addBlur = () => {
     showLoadingSpinner()
@@ -233,6 +184,19 @@ const Viewer = ({ dziUrl, filename }) => {
       yMax: imageRect.y + imageRect.height,
     };
   };
+  useEffect(() => {
+    if (annotationsByFile) {
+      const initialVisibility = {};
+      Object.entries(annotationsByFile).forEach(([filename, annotationGroup]) => {
+        initialVisibility[filename] = {};
+        annotationGroup.forEach(({ properties }) => {
+          const type = properties.classification.name;
+          initialVisibility[filename][type] = true; // Default to visible
+        });
+      });
+      setVisibleAnnotations(initialVisibility);
+    }
+  }, [annotationsByFile]);
   
   const fetchNormalizedAnnotations = async (bounds, filename) => {
     const currentZoom = viewer.viewport.getZoom();
@@ -240,30 +204,48 @@ const Viewer = ({ dziUrl, filename }) => {
       setNotification('Zoom in to view annotations.');
       return;
     }
-    const actualFilename = filename.replace('.dzi','')
+  
+    const actualFilename = filename.replace('.dzi', '');
+  
     try {
       addBlur();
       const response = await axios.post(
         `${process.env.REACT_APP_BACKEND_URL}/get_normalized_annotations`,
-        { bounds, filename:actualFilename }
+        { bounds, filename: actualFilename }
       );
   
       const data = response.data;
       if (!data || Object.keys(data).length === 0) {
         setNotification('No annotations visible in the current viewport.');
-        return;
+        removeBlur();
+        return {};
       }
   
+      // Set annotations and initialize visibility state
       setAnnotationsByFile(data); // Group annotations by filename
+  
+      const initialVisibility = {};
+      Object.entries(data).forEach(([filename, annotationGroup]) => {
+        initialVisibility[filename] = {};
+        annotationGroup.forEach(({ properties }) => {
+          const type = properties.classification.name;
+          initialVisibility[filename][type] = true; // Default all to visible
+        });
+      });
+      setVisibleAnnotations(initialVisibility);
+  
       setNotification(''); // Clear notification if annotations are found
       removeBlur();
       return data;
     } catch (error) {
-      console.error("Error fetching normalized annotations:", error);
+      console.error('Error fetching normalized annotations:', error);
       setNotification('Error fetching annotations. Please try again.');
+      removeBlur();
       return {};
     }
   };
+  
+  
   
   
   
@@ -321,6 +303,7 @@ const Viewer = ({ dziUrl, filename }) => {
     }
   };
   const drawAnnotationsWithPixi = () => {
+    
     if (!viewer || !pixiAppRef.current) {
       console.warn("Viewer or PixiJS is not initialized.");
       return;
@@ -332,11 +315,12 @@ const Viewer = ({ dziUrl, filename }) => {
       pixiAppRef.current.renderer.render(pixiAppRef.current.stage);
       return;
     }
-  
+    setNotification('Loading Annotations...');
   
     // Clear previous annotations for all types
     pixiAppRef.current.stage.removeChildren();
-  
+    setNotification('Loading Annotations...');
+
     // Iterate through annotations grouped by filename
     Object.entries(annotationsByFile).forEach(([filename, annotationGroup]) => {
       const fileVisibility = visibleAnnotations[filename];
@@ -415,6 +399,7 @@ const Viewer = ({ dziUrl, filename }) => {
   
         // Add graphics to the stage
         pixiAppRef.current.stage.addChild(graphics);
+        setNotification('');
         hideLoadingSpinner();
       });
     });
@@ -440,40 +425,45 @@ const Viewer = ({ dziUrl, filename }) => {
       }
     };
   };
+  useEffect(() => {
+    if (zoomValue >= 7) {
+      renderHexBins(); // Ensure hex bins are re-rendered
+    } else {
+      drawAnnotationsWithPixi(); // Ensure annotations are rendered
+    }
+  }, [zoomValue]);
   
   const handlePanZoomEnd = async () => {
-    setLoadingStatus(false);
     const currentZoom = viewer ? viewer.viewport.getZoom() : 0;
   
     if (currentZoom <= 7) {
-      setNotification('Zoom in to load annotations.');
-      return;
-    }
-    else{
-      setNotification('Loading Annotations...');
-    }
+      // Switch to hex bins rendering
+      pixiAppRef.current.stage.removeChildren(); // Clear all PixiJS drawings
+      setAnnotations([]); // Clear annotations state
+      renderHexBins(); // Trigger hex bin rendering
+    } else {
+      // Switch to individual annotations rendering
+      const bounds = getViewportBounds();
+      if (!bounds || !selectedImage) return;
   
-    const bounds = getViewportBounds();
-    if (!bounds || !selectedImage) return;
+      try {
+        const annotationsByFile = await fetchNormalizedAnnotations(bounds, selectedImage);
+        setAnnotations((prevAnnotations) => {
+          const uniqueAnnotations = new Map(prevAnnotations.map((a) => [a.id, a]));
   
-    removeBlur();
-  
-    try {
-      const annotationsByFile = await fetchNormalizedAnnotations(bounds, selectedImage);
-      setAnnotations((prevAnnotations) => {
-        const uniqueAnnotations = new Map(prevAnnotations.map((a) => [a.id, a]));
-  
-        Object.entries(annotationsByFile).forEach(([filename, annotationGroup]) => {
-          annotationGroup.forEach((annotation) => {
-            uniqueAnnotations.set(annotation.id, annotation);
+          Object.entries(annotationsByFile).forEach(([filename, annotationGroup]) => {
+            annotationGroup.forEach((annotation) => {
+              uniqueAnnotations.set(annotation.id, annotation);
+            });
           });
+          return Array.from(uniqueAnnotations.values());
         });
-        return Array.from(uniqueAnnotations.values());
-      });
-      setNotification(''); // Clear notification if annotations are found
-      drawAnnotationsWithPixi();
-    } catch (error) {
-      console.error("Error during pan/zoom end handling:", error);
+        setNotification(''); // Clear notification if annotations are found
+        drawAnnotationsWithPixi(); // Trigger annotation rendering
+      } catch (error) {
+        console.error("Error during pan/zoom end handling:", error);
+        setNotification('Error loading annotations.');
+      }
     }
   };
   
@@ -500,7 +490,6 @@ const Viewer = ({ dziUrl, filename }) => {
       viewer.addHandler('pan', clearGraphics);
       viewer.addHandler('animation-finish', updateZoomValue);
       viewer.addHandler('animation-finish', hideLoadingSpinner);
-      viewer.addHandler('animation-finish', renderHexBins);
   
       return () => {
         viewer.removeHandler('zoom', updateZoomValue);
@@ -514,16 +503,19 @@ const Viewer = ({ dziUrl, filename }) => {
   }, [viewer]);
 
   const [loadingStatus, setLoadingStatus] = useState("");
+
   useEffect(() => {
-    const initialVisibility = {};
-    Object.entries(annotationsByFile).forEach(([filename, annotationGroup]) => {
-      initialVisibility[filename] = {};
-      annotationGroup.forEach(({ properties }) => {
-        const type = properties.classification.name;
-        initialVisibility[filename][type] = false; 
+    if (Object.keys(annotationsByFile).length > 0) {
+      const initialVisibility = {};
+      Object.entries(annotationsByFile).forEach(([filename, annotationGroup]) => {
+        initialVisibility[filename] = {};
+        annotationGroup.forEach(({ properties }) => {
+          const type = properties.classification.name;
+          initialVisibility[filename][type] = true; // Default to visible
+        });
       });
-    });
-    setVisibleAnnotations(initialVisibility);
+      setVisibleAnnotations(initialVisibility);
+    }
   }, [annotationsByFile]);
   
   
@@ -634,8 +626,6 @@ const fetchHexBins = async (dziFile, resolution) => {
 
     if (response.data && Array.isArray(response.data.hex_bins)) {
       hexBinsRef.current = response.data.hex_bins; // Store in ref, not state
-      console.log("HexBins fetched and stored:", hexBinsRef.current);
-      renderHexBins(); // Trigger rendering directly
     } else {
       console.error("Invalid hex bin data received:", response.data);
     }
@@ -751,8 +741,15 @@ const handleMultipleAnnotationUpload = async () => {
 </ul>
 
               </div>
-            <div className="annotation-toggles">
-  <h3>Toggle Annotations</h3>{notification && <div><p style={{color:"Orange", fontWeight:"Bold"}}>Current Status: </p><p>{notification}</p></div>}
+
+<div className="annotation-toggles">
+  <h3>Toggle Annotations</h3>
+  {notification && (
+    <div>
+      <p style={{ color: 'Orange', fontWeight: 'Bold' }}>Current Status: </p>
+      <p>{notification}</p>
+    </div>
+  )}
   {Object.entries(annotationsByFile).map(([filename, annotationGroup]) => (
     <div key={filename}>
       <h4>{filename.replace('.json', '')}</h4>
@@ -771,6 +768,7 @@ const handleMultipleAnnotationUpload = async () => {
     </div>
   ))}
 </div>
+
 
 
 
@@ -796,7 +794,6 @@ const handleMultipleAnnotationUpload = async () => {
           ))}
                 </div>
       </div>
-      <ClinicalData data={clinicalData} />
       <div className="upload-section">
         <input type="file" onChange={handleAnnotationFileChange} accept=".json,.geojson" multiple />
         <button onClick={handleMultipleAnnotationUpload} className="upload-btn">
