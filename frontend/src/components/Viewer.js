@@ -5,6 +5,8 @@ import * as PIXI from 'pixi.js';
 import { Application } from 'pixi.js';
 import './Viewer.css'; 
 import ClinicalData from './ClinicalData';
+import * as h3 from 'h3-js';
+
 
 const Viewer = ({ dziUrl, filename }) => {
   const viewerRef = useRef(null);
@@ -23,6 +25,7 @@ const Viewer = ({ dziUrl, filename }) => {
   const [annotationsByFile, setAnnotationsByFile] = useState({}); // Store annotations grouped by filename
   const [notification, setNotification] = useState('');
   const [clinicalData, setClinicalData] = useState("No Clinical Data Available"); // State for clinical data
+  const hexBinsRef = useRef([]);
 
 
   const fetchAvailableImages = async () => {
@@ -44,12 +47,144 @@ const Viewer = ({ dziUrl, filename }) => {
     setCurrentDziUrl(`${process.env.REACT_APP_BACKEND_URL}/output/${selectedImage}`); // Update DZI URL
   
     const imageFilename = selectedImage.replace('.dzi', ''); // Remove .dzi from the filename
-    const bounds = getViewportBounds();
-    if(bounds)
-    {
-      await fetchNormalizedAnnotations(bounds, imageFilename); // Fetch linked annotations
-    }
+  
+    await fetchHexBins(imageFilename, 2); // Fetch and store hex bins for this image
   };
+  
+
+  
+  
+  const renderHexBins = () => {
+    console.log("Starting renderHexBins...");
+    
+    if (!pixiAppRef.current || !viewer) {
+      console.warn("PixiJS or Viewer is not initialized.");
+      return;
+    }
+  
+    const hexBins = hexBinsRef.current; // Read from ref
+    if (!Array.isArray(hexBins) || hexBins.length === 0) {
+      console.warn("HexBins is not valid or empty:", hexBins);
+      return;
+    }
+  
+    console.log(`Hexbin : ${hexBins}`);
+  
+    // Create a new Graphics object
+    const graphics = new PIXI.Graphics();
+  
+    hexBins.forEach((bin) => {
+      const { image_coordinates, classifications } = bin;
+  
+      if (!Array.isArray(image_coordinates) || image_coordinates.length === 0) {
+        console.warn(`Invalid or empty image_coordinates for bin:`, bin);
+        return;
+      }
+  
+      if (!classifications || Object.keys(classifications).length === 0) {
+        console.warn(`No classifications data for bin:`, bin);
+        return;
+      }
+  
+      // Calculate the gradient color for the bin
+      const gradientColor = calculateGradientColor(classifications);
+  
+      // Draw the hexbin
+      image_coordinates.forEach(([x, y], index) => {
+        // Transform image coordinates to viewport coordinates
+        const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
+  
+        // Transform viewport coordinates to screen coordinates
+        const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
+  
+        if (index === 0) {
+          graphics.moveTo(screenPoint.x, screenPoint.y);
+        } else {
+          graphics.lineTo(screenPoint.x, screenPoint.y);
+        }
+      });
+  
+      graphics.closePath();
+      graphics.beginFill(gradientColor, 0.3); // Use the calculated gradient color with transparency
+      graphics.endFill();
+    });
+  
+    console.log("Adding graphics to PixiJS stage...");
+    pixiAppRef.current.stage.addChild(graphics);
+  
+    console.log("Rendering PixiJS stage...");
+    pixiAppRef.current.renderer.render(pixiAppRef.current.stage);
+    console.log("Hexbins rendered successfully.");
+  };
+  const calculateGradientColor = (classifications) => {
+    let totalWeight = 0;
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+  
+    Object.values(classifications).forEach(({ count, color }) => {
+      totalWeight += count;
+      red += color[0] * count;
+      green += color[1] * count;
+      blue += color[2] * count;
+    });
+  
+    if (totalWeight === 0) return 0x666666; // Default gray if no data
+  
+    // Calculate weighted average
+    red = Math.round(red / totalWeight);
+    green = Math.round(green / totalWeight);
+    blue = Math.round(blue / totalWeight);
+  
+    // Convert RGB to hexadecimal
+    return (red << 16) + (green << 8) + blue;
+  };
+    
+  
+  
+  const latLonToImageCoordinates = (lat, lon, imageWidth, imageHeight) => {
+    // Convert lat/lon to image coordinates without clamping
+    const x = ((lon + 180) / 360) * imageWidth;
+    const y = ((lat + 90) / 180) * imageHeight;
+  
+    console.log(`Lat/Lon (${lat}, ${lon}) -> Image Coords (${x}, ${y})`);
+    return [x, y];
+  };
+  
+  
+  
+  
+  
+  const drawDebugOverlay = () => {
+    if (!pixiAppRef.current || !viewer) {
+      console.warn("PixiJS or Viewer is not initialized.");
+      return;
+    }
+    console.log("Drawing debug overlay...");
+  
+    const graphics = new PIXI.Graphics();
+    graphics.beginFill(0xff0000, 1); // Red with transparency
+  
+    // Draw markers at known positions (corners of the image)
+    const imageCorners = [
+      [0, 0], // Top-left
+      [viewer.source.dimensions.x, 0], // Top-right
+      [viewer.source.dimensions.x, viewer.source.dimensions.y], // Bottom-right
+      [0, viewer.source.dimensions.y], // Bottom-left
+    ];
+  
+    imageCorners.forEach(([x, y]) => {
+      const viewportPoint = viewer.viewport.imageToViewportCoordinates(x, y);
+      const screenPoint = viewer.viewport.viewportToViewerElementCoordinates(viewportPoint);
+  
+      graphics.drawCircle(screenPoint.x, screenPoint.y, 10); // Circle marker
+    });
+  
+    graphics.endFill();
+    pixiAppRef.current.stage.addChild(graphics);
+    pixiAppRef.current.renderer.render(pixiAppRef.current.stage);
+  };
+  
   
   
   
@@ -70,6 +205,7 @@ const Viewer = ({ dziUrl, filename }) => {
       pixiAppRef.current = app;
       annotationGraphicsRef.current = new PIXI.Graphics();
       app.stage.addChild(annotationGraphicsRef.current);
+      drawDebugOverlay();
     }).catch(err => console.error("PixiJS Initialization error: ", err));
   };
 
@@ -364,6 +500,7 @@ const Viewer = ({ dziUrl, filename }) => {
       viewer.addHandler('pan', clearGraphics);
       viewer.addHandler('animation-finish', updateZoomValue);
       viewer.addHandler('animation-finish', hideLoadingSpinner);
+      viewer.addHandler('animation-finish', renderHexBins);
   
       return () => {
         viewer.removeHandler('zoom', updateZoomValue);
@@ -405,19 +542,21 @@ const Viewer = ({ dziUrl, filename }) => {
       viewer.destroy(); // Destroy the existing viewer instance
       setViewer(null); // Clear the viewer state to prepare for reinitialization
     }
-  
+    
     if (viewerRef.current) {
       const newViewer = OpenSeadragon({
         element: viewerRef.current,
         tileSources: currentDziUrl, // Use the current DZI URL
         showNavigationControl: false,
-        maxZoomPixelRatio: 15,
+        maxZoomPixelRatio: 10, // Increase to allow higher zoom levels
         minZoomImageRatio: 1,
         minZoomLevel: 1,
         visibilityRatio: 1.0,
         constrainDuringPan: true,
+        defaultZoomLevel: 1,
+        minZoomLevel: 1,
       });
-  
+      
       newViewer.addHandler('open', () => {
         setViewer(newViewer); // Save the new viewer instance in state
         newViewer.viewport.zoomTo(1);
@@ -486,24 +625,58 @@ const handleAnnotationFileChange = (event) => {
   }
 };
 
+const fetchHexBins = async (dziFile, resolution) => {
+  try {
+    const response = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/get_hex_bins`, {
+      dzi_file: dziFile,
+      resolution: resolution,
+    });
+
+    if (response.data && Array.isArray(response.data.hex_bins)) {
+      hexBinsRef.current = response.data.hex_bins; // Store in ref, not state
+      console.log("HexBins fetched and stored:", hexBinsRef.current);
+      renderHexBins(); // Trigger rendering directly
+    } else {
+      console.error("Invalid hex bin data received:", response.data);
+    }
+  } catch (error) {
+    console.error("Error fetching hex bins:", error);
+  }
+};
+
+
+
+
 const handleAnnotationUpload = async (file) => {
   if (!file) {
     alert('Please select an annotation file first!');
     return;
   }
-  const dziFilenameWithoutExtension = selectedImage.replace('.dzi', '');
+
+  
+
+  const imageDimensions = viewer.source
+    ? {
+        width: viewer.source.dimensions.x, // Fetch image width
+        height: viewer.source.dimensions.y, // Fetch image height
+      }
+    : { width: 0, height: 0 };
+
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('dziFile', dziFilenameWithoutExtension);
-
+  formData.append('dziFile', selectedImage.replace('.dzi', ''));
+  formData.append('imageWidth', imageDimensions.width);
+  formData.append('imageHeight', imageDimensions.height);
 
   try {
-    await axios.post(`${process.env.REACT_APP_BACKEND_URL}/link_annotation_to_dzi`, formData);
+    const response = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/link_annotation_to_dzi`, formData);
     alert(`Successfully uploaded annotation ${file.name}`);
   } catch (error) {
     console.error('Error uploading annotation file:', error);
   }
 };
+
+
 
 const handleMultipleAnnotationUpload = async () => {
   if (annotationFiles.length === 0) {
@@ -605,7 +778,6 @@ const handleMultipleAnnotationUpload = async () => {
 
         </div>
       </div>
-      <ClinicalData data={clinicalData} />
       <div className="zoom-slider-container">
         Zoom Level
       <input
@@ -624,6 +796,7 @@ const handleMultipleAnnotationUpload = async () => {
           ))}
                 </div>
       </div>
+      <ClinicalData data={clinicalData} />
       <div className="upload-section">
         <input type="file" onChange={handleAnnotationFileChange} accept=".json,.geojson" multiple />
         <button onClick={handleMultipleAnnotationUpload} className="upload-btn">

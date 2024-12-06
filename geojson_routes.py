@@ -6,6 +6,8 @@ from gridfs import GridFS
 from bson.objectid import ObjectId
 import os
 import json
+import pymongo
+
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -16,6 +18,9 @@ mongo_uri = os.getenv("MONGO_URI")
 client = MongoClient(mongo_uri, server_api=ServerApi('1'))
 db = client.annotationsDB
 geojson_fs = GridFS(db)
+geojson_collection = db.geojson_annotations
+hexbin_collection = db.geojson_hex_bins
+
 
 # Blueprint for GeoJSON routes
 geojson_blueprint = Blueprint('geojson', __name__)
@@ -24,18 +29,59 @@ geojson_blueprint = Blueprint('geojson', __name__)
 def link_annotation_to_dzi():
     file = request.files['file']
     filename = file.filename
-    dzi_file = request.form.get('dziFile')
+    dzi_file = request.form.get('dziFile')  # Get the associated DZI file
+    image_width = request.form.get('imageWidth')  # Get the image width
+    image_height = request.form.get('imageHeight')  # Get the image height
 
     if not dzi_file:
         return jsonify({"error": "DZI file is required"}), 400
 
+    if not image_width or not image_height:
+        return jsonify({"error": "Image dimensions (width and height) are required"}), 400
+
+    # Convert dimensions to integers
     try:
-        # Save file to GridFS
-        file_id = geojson_fs.put(file, filename=filename, dzi_file=dzi_file)
-        return jsonify({"message": "Uploaded successfully", "file_id": str(file_id)})
+        image_width = int(image_width)
+        image_height = int(image_height)
+    except ValueError:
+        return jsonify({"error": "Invalid image dimensions"}), 400
+
+    # Save the file locally
+    file_path = os.path.join('annotations', filename)
+    os.makedirs('annotations', exist_ok=True)
+    file.save(file_path)
+
+    try:
+        # Read the GeoJSON data from the file
+        with open(file_path, 'r') as f:
+            geojson_data = json.load(f)
+
+        # Insert the full GeoJSON data into MongoDB as a normal document
+        geojson_collection.insert_one({
+            "filename": filename,
+            "dzi_file": dzi_file,  # Save the DZI file linked to this annotation
+            "geojson": geojson_data,  # Store the full GeoJSON content
+            "image_width": image_width,  # Store image width
+            "image_height": image_height  # Store image height
+        })
+
+        # Save the file to GridFS
+        with open(file_path, 'rb') as f:
+            file_id = geojson_fs.put(f, filename=filename, dzi_file=dzi_file)
+
+        return jsonify({
+            "message": "Annotation file uploaded and linked to DZI successfully",
+            "filename": filename,
+            "file_id": str(file_id),
+            "image_width": image_width,
+            "image_height": image_height
+        })
+
     except PyMongoError as e:
         return jsonify({"error": str(e)}), 500
 
+    except Exception as e:
+        return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
 
 @geojson_blueprint.route('/get_normalized_annotations', methods=['POST'])
 def get_normalized_annotations():
@@ -108,6 +154,36 @@ def get_normalized_annotations():
             grouped_annotations[file_name] = filtered_features
 
         return jsonify(grouped_annotations), 200
+
+    except PyMongoError as e:
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
+
+@geojson_blueprint.route('/get_hex_bins', methods=['POST'])
+def get_hex_bins():
+    try:
+        data = request.json
+        dzi_file = data.get("dzi_file")
+        resolution = data.get("resolution")
+
+        if not dzi_file or not resolution:
+            return jsonify({"error": "dzi_file and resolution are required"}), 400
+
+        # Query MongoDB for the hex bins, including image_coordinates and classifications
+        hex_bins = list(hexbin_collection.find(
+            {"dzi_file": dzi_file, "resolution": int(resolution)},
+            {
+                "_id": 0, 
+                "hex_id": 1, 
+                "annotation_count": 1, 
+                "feature_ids": 1, 
+                "image_coordinates": 1, 
+                "classifications": 1  # Include classifications (name and color)
+            }
+        ))
+
+        return jsonify({"hex_bins": hex_bins})
 
     except PyMongoError as e:
         return jsonify({"error": str(e)}), 500
