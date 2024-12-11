@@ -1,8 +1,8 @@
 /* components/Navbar.css */
 .navbar {
     display: flex;
-    justify-content: space-evenly;
     align-items: center;
+    flex-direction: row;
     background: linear-gradient(145deg, #FFF9F0, #F0ECE3);
     /* padding: 16px; */
     color: white;
@@ -16,7 +16,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-direction: column;
+    flex-direction: row;
+    gap: 38px;
   }
   .ashoka-logo {
     
@@ -26,7 +27,7 @@
   }
   
   .navbar-brand {
-    font-size: 1.5rem;
+    font-size: 18px;
     font-weight: bold;
   }
   
