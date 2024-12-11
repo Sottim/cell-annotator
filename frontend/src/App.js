@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Upload from './components/Upload';
 import Viewer from './components/Viewer';
 import './App.css'; // Importing App CSS
+import Navbar from './components/Navbar';
 
 const App = () => {
   const [dziUrl, setDziUrl] = useState('');
@@ -16,6 +17,7 @@ const App = () => {
 
   return (
     <div className='app-container'>
+      <Navbar />
       <h1 className="page-title">Upload WSI</h1>
       <Upload onSuccess={handleUploadSuccess} />
       {dziUrl && <Viewer dziUrl={dziUrl} filename={filename} />}

@@ -752,7 +752,7 @@ const handleMultipleAnnotationUpload = async () => {
   )}
   {Object.entries(annotationsByFile).map(([filename, annotationGroup]) => (
     <div key={filename}>
-      <h4>{filename.replace('.json', '')}</h4>
+      <h4>{filename.replace('.geojson', '')}</h4>
       {annotationGroup.map(({ properties }, index) => (
         <div key={index}>
           <label>
@@ -794,6 +794,7 @@ const handleMultipleAnnotationUpload = async () => {
           ))}
                 </div>
       </div>
+      <h2 style={{color: '#B22222'}}>Link Annotations to selected DZI</h2>
       <div className="upload-section">
         <input type="file" onChange={handleAnnotationFileChange} accept=".json,.geojson" multiple />
         <button onClick={handleMultipleAnnotationUpload} className="upload-btn">
