@@ -210,7 +210,7 @@ const Viewer = ({ dziUrl, filename }) => {
     try {
       addBlur();
       const response = await axios.post(
-        `${process.env.REACT_APP_BACKEND_URL}/get_normalized_annotations`,
+        `${process.env.REACT_APP_BACKEND_MONGODB_URL}/get_normalized_annotations`,
         { bounds, filename: actualFilename }
       );
   
@@ -632,7 +632,7 @@ const handleAnnotationFileChange = (event) => {
 
 const fetchHexBins = async (dziFile, resolution) => {
   try {
-    const response = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/get_hex_bins`, {
+    const response = await axios.post(`${process.env.REACT_APP_BACKEND_MONGODB_URL}/get_hex_bins`, {
       dzi_file: dziFile,
       resolution: resolution,
     });
@@ -672,7 +672,7 @@ const handleAnnotationUpload = async (file) => {
   formData.append('imageHeight', imageDimensions.height);
 
   try {
-    const response = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/link_annotation_to_dzi`, formData);
+    const response = await axios.post(`${process.env.REACT_APP_BACKEND_MONGODB_URL}/link_annotation_to_dzi`, formData);
     alert(`Successfully uploaded annotation ${file.name}`);
   } catch (error) {
     console.error('Error uploading annotation file:', error);
