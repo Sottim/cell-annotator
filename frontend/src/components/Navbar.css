@@ -6,10 +6,11 @@
     background: linear-gradient(145deg, #FFF9F0, #F0ECE3);
     /* padding: 16px; */
     color: white;
-    width: 100%;
+    width: 100vw;
     /* height: 5vh; */
     color: #B22222;
     /* border-bottom: 2px solid #ffffff; */
+    border-bottom: 4px solid #ffffff;
   }
 
   .ashoka-logo-container {

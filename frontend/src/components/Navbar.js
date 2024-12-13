@@ -6,7 +6,7 @@ const Navbar = () => {
   return (
     <nav className="navbar">
         <div className='ashoka-logo-container'><img className="ashoka-logo" src={logo} alt="Ashoka University Logo"/>
-        <div className="navbar-brand">Ashoka University WSI Viewer</div>
+        <div className="navbar-brand">Kutum Lab WSI Viewer</div>
         </div>
     </nav>
   );

@@ -517,6 +517,19 @@ const Viewer = ({ dziUrl, filename }) => {
       setVisibleAnnotations(initialVisibility);
     }
   }, [annotationsByFile]);
+  useEffect(() => {
+    const types = new Set(); // Use a set to ensure unique types
+    annotations.forEach((annotation) => {
+      const features = annotation.features || [];
+      features.forEach((feature) => {
+        if (feature.properties?.classification?.name) {
+          types.add(feature.properties.classification.name);
+        }
+      });
+    });
+    setAnnotationTypes([...types]); // Convert the set to an array
+    console.log("Updated annotation types:", [...types]);
+  }, [annotations]);
   
   
   const handleToggleAnnotation = (filename, type) => {
@@ -706,41 +719,70 @@ const handleMultipleAnnotationUpload = async () => {
           <div id="openseadragon-viewer" ref={viewerRef} className="wsi-viewer">
           </div>
           <div className="annotation-legend">
-            
-          <ul>
-  {annotationTypes.map((type) => {
-    let color = null;
+  <ul>
+    {zoomValue <= 7 ? (
+      // Legend for Hex Bins
+      hexBinsRef.current.length > 0 ? (
+        <div>
+          <h4>Cluster Legend</h4>
+          {Object.entries(hexBinsRef.current[0].classifications).map(
+            ([type, { color, count }], index) => (
+              <li
+                key={index}
+                style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}
+              >
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: '15px',
+                    height: '15px',
+                    backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
+                    marginRight: '10px',
+                  }}
+                ></span>
+                {type}
+              </li>
+            )
+          )}
+        </div>
+      ) : (
+        <p>Loading cluster classifications...</p>
+      )
+    ) : (
+      // Legend for Individual Annotations
+      Object.entries(annotationsByFile).map(([filename, annotationGroup]) => (
+        <div key={filename}>
+          <h4>{filename.replace('.geojson', '')}</h4>
+          {annotationGroup.map(({ properties }, index) => {
+            const type = properties.classification.name;
+            const color = properties.classification.color; // Access the color property
+            if (!color) return null; // Skip if color is missing
 
-    for (const annotation of annotations) {
-      const features = annotation.features || []; // Default to an empty array if `features` is undefined
-      const feature = features.find((feature) => feature.properties.classification.name === type);
+            return (
+              <li
+                key={index}
+                style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}
+              >
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: '15px',
+                    height: '15px',
+                    backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
+                    marginRight: '10px',
+                  }}
+                ></span>
+                {type}
+              </li>
+            );
+          })}
+        </div>
+      ))
+    )}
+  </ul>
+</div>
 
-      if (feature) {
-        color = feature.properties.classification.color;
-        break;
-      }
-    }
 
-    if (!color) return null;
-
-    return (
-      <li key={type} style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-        <span
-          style={{
-            display: 'inline-block',
-            width: '15px',
-            height: '15px',
-            backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})`,
-            marginRight: '10px',
-          }}
-        ></span>
-        {type}
-      </li>
-    );
-  })}
-</ul>
-
-              </div>
 
 <div className="annotation-toggles">
   <h3>Toggle Annotations</h3>

@@ -1,0 +1,8 @@
+Flask==2.3.2
+Flask-CORS==3.0.10
+pymongo[srv]==4.6.0
+gridfs==4.6.0
+openslide-python==1.2.0
+python-dotenv==1.0.0
+h3-py==4.0.1
+gunicorn==21.2.0
