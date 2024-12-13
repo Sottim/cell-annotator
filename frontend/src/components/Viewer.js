@@ -28,7 +28,7 @@ const Viewer = ({ dziUrl, filename }) => {
 
   const fetchAvailableImages = async () => {
     try {
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/available_images`);
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_MONGODB_URL}/available_images`);
       setAvailableImages(response.data.images);
     } catch (error) {
       console.error('Error fetching available images:', error);
