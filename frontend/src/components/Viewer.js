@@ -757,7 +757,7 @@ const handleMultipleAnnotationUpload = async () => {
           <h4>{((filename.replace('.geojson', '')).replace('cell_detection', 'Cell Centroids')).replace('cells', 'Cell Contours')}</h4>
           {annotationGroup.map(({ properties }, index) => {
             const type = properties.classification.name;
-            const color = properties.classification.color; // Access the color property
+            const color = properties.classification.color; // Access the color property.replace
             if (!color) return null; // Skip if color is missing
 
             return (
@@ -796,7 +796,7 @@ const handleMultipleAnnotationUpload = async () => {
   )}
   {Object.entries(annotationsByFile).map(([filename, annotationGroup]) => (
     <div key={filename}>
-      <h4>{filename.replace('.geojson', '')}</h4>
+      <h4>{((filename.replace('.geojson', '')).replace('cell_detection', 'Cell Centroids')).replace('cells', 'Cell Contours')}</h4>
       {annotationGroup.map(({ properties }, index) => (
         <div key={index}>
           <label>
