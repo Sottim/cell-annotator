@@ -13,6 +13,7 @@ from openslide.deepzoom import DeepZoomGenerator
 import json
 from geojson_routes import geojson_blueprint  # Import the GeoJSON routes
 from dotenv import load_dotenv
+from PIL import Image
 
 load_dotenv()
 
@@ -107,6 +108,100 @@ def get_available_images():
 def output_files(filename):
     return send_from_directory('output', filename)
 
+@app.route('/upload_patch', methods=['POST'])
+def upload_patch():
+    file = request.files['file']
+    filename = file.filename
+    if not filename.lower().endswith('.png'):
+        return jsonify({'error': 'Only .png files are supported for patch upload.'}), 400
+    file_path = os.path.join('uploads', filename)
+    dzi_path = os.path.join('output', filename + '.dzi')
+    tiles_path = os.path.join('output', filename + '_files')
+
+    # Check if the file already exists
+    if os.path.exists(file_path):
+        if os.path.exists(dzi_path) and os.path.exists(tiles_path):
+            return jsonify({'message': 'Patch already exists and is converted', 'dzi_path': filename + '.dzi'})
+    else:
+        os.makedirs('uploads', exist_ok=True)
+        file.save(file_path)
+
+    try:
+        img = Image.open(file_path)
+        generate_deepzoom_patch(img, dzi_path, tiles_path)
+        return jsonify({'message': 'Patch uploaded and converted successfully', 'dzi_path': filename + '.dzi'})
+    except Exception as e:
+        return jsonify({'error': f'Failed to process patch: {str(e)}'}), 500
+
+
+def generate_deepzoom_patch(img, dzi_path, tiles_path):
+    tile_size = 128
+    overlap = 2
+    format = 'jpeg'
+    import math
+    width, height = img.size
+    max_dim = max(width, height)
+    level_count = int(math.ceil(math.log(max_dim, 2))) + 1
+
+    os.makedirs(tiles_path, exist_ok=True)
+    # Write DZI file
+    dzi_template = f'''<?xml version="1.0" encoding="UTF-8"?>\n<Image TileSize="{tile_size}" Overlap="{overlap}" Format="{format}" xmlns="http://schemas.microsoft.com/deepzoom/2008">\n    <Size Width="{width}" Height="{height}"/>\n</Image>'''
+    with open(dzi_path, 'w') as f:
+        f.write(dzi_template)
+
+    for level in range(level_count):
+        scale = 2 ** (level_count - level - 1)
+        level_width = int(math.ceil(width / scale))
+        level_height = int(math.ceil(height / scale))
+        level_img = img.resize((level_width, level_height), Image.LANCZOS)
+        level_dir = os.path.join(tiles_path, str(level))
+        os.makedirs(level_dir, exist_ok=True)
+        cols = int(math.ceil(level_width / tile_size))
+        rows = int(math.ceil(level_height / tile_size))
+        for col in range(cols):
+            for row in range(rows):
+                # Calculate overlap-aware crop boundaries
+                left = col * tile_size
+                upper = row * tile_size
+                right = left + tile_size
+                lower = upper + tile_size
+                # Add overlap except at the edges
+                if col > 0:
+                    left -= overlap
+                if row > 0:
+                    upper -= overlap
+                if col < cols - 1:
+                    right += overlap
+                if row < rows - 1:
+                    lower += overlap
+                # Clamp to image boundaries
+                left = max(left, 0)
+                upper = max(upper, 0)
+                right = min(right, level_width)
+                lower = min(lower, level_height)
+                tile = level_img.crop((left, upper, right, lower))
+                tile_path = os.path.join(level_dir, f'{col}_{row}.{format}')
+                tile.save(tile_path, format=format.upper())
+
+def process_geojson(dzi_file, geojson_data, image_width, image_height, resolutions):
+    """
+    Process GeoJSON data to compute hexagons and store them in the hexbin collection.
+    """
+    # Handle both dict (FeatureCollection) and list (features) input
+    if isinstance(geojson_data, dict) and "features" in geojson_data:
+        features = geojson_data["features"]
+    elif isinstance(geojson_data, list):
+        features = geojson_data
+    else:
+        print("Invalid GeoJSON format: expected dict with 'features' or a list.")
+        return
+
+    for resolution in resolutions:
+        hex_bins = {}
+
+        for feature in features:
+            geometry = feature.get("geometry")
+            # ... rest of your code ...
 
 if __name__ == '__main__':
     app.run(debug=True)

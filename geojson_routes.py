@@ -36,23 +36,36 @@ def link_annotation_to_dzi():
     Calls compute_hexagons_for_specific_file_and_dzi to process the uploaded data.
     """
     file = request.files['file']
-    filename = file.filename
-    dzi_file = request.form.get('dziFile')  # Associated DZI file
-    image_width = request.form.get('imageWidth')  # Image width
-    image_height = request.form.get('imageHeight')  # Image height
+    image_filename = request.form.get('dziFile')  # This is the image filename (e.g., gall-bladder-patch.png)
+    model_name = request.form.get('modelName')     # New: model name from dropdown
+    image_width = request.form.get('imageWidth')
+    image_height = request.form.get('imageHeight')
 
-    if not dzi_file or not image_width or not image_height:
-        return jsonify({"error": "DZI file, image width, and height are required"}), 400
+    if not image_filename or not image_width or not image_height or not model_name:
+        return jsonify({"error": "Image filename, model name, width, and height are required"}), 400
+
+    # Remove extension from image filename
+    base_image_name = os.path.splitext(image_filename)[0]
+    annotation_filename = f"{base_image_name}_{model_name}.geojson"
+
+    # Check for duplicate in GridFS
+    existing = geojson_fs.find_one({"filename": annotation_filename})
+    if existing:
+        return jsonify({"error": "Annotation for this image and model already exists."}), 409
+
+    # Check for duplicate in GridFS and delete if exists
+    # existing = geojson_fs.find_one({"filename": annotation_filename})
+    # if existing:
+    #     geojson_fs.delete(existing._id)
 
     try:
-        # Convert dimensions to integers
         image_width = int(image_width)
         image_height = int(image_height)
 
-        # Save the file to GridFS with metadata
-        file_id = geojson_fs.put(file, metadata={
-            "filename": filename,
-            "dzi_file": dzi_file,
+        file_id = geojson_fs.put(file, filename=annotation_filename, metadata={
+            "filename": annotation_filename,
+            "dzi_file": image_filename,
+            "model_name": model_name,
             "image_width": image_width,
             "image_height": image_height,
             "file_size": file.content_length,
@@ -60,29 +73,42 @@ def link_annotation_to_dzi():
 
         # Call compute_hexagons_for_specific_file_and_dzi with the uploaded file details
         resolutions = [2]  # Example resolution; adjust as needed
-        compute_hexagons_for_specific_file_and_dzi(resolutions, filename, dzi_file)
+        compute_hexagons_for_specific_file_and_dzi(resolutions, annotation_filename, image_filename)
 
         return jsonify({
             "message": "Annotation file uploaded and linked to DZI successfully using GridFS.",
-            "filename": filename,
-            "dzi_file": dzi_file,
+            "filename": annotation_filename,
+            "dzi_file": image_filename,
             "file_id": str(file_id),
             "image_width": image_width,
             "image_height": image_height,
         }), 200
 
     except PyMongoError as e:
+        print("PyMongoError:", e)
         return jsonify({"error": str(e)}), 500
     except Exception as e:
+        import traceback
+        print("Unexpected error in /link_annotation_to_dzi:")
+        traceback.print_exc()
         return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
 def process_geojson(dzi_file, geojson_data, image_width, image_height, resolutions):
     """
     Process GeoJSON data to compute hexagons and store them in the hexbin collection.
     """
+    # Handle both dict (FeatureCollection) and list (features) input
+    if isinstance(geojson_data, dict) and "features" in geojson_data:
+        features = geojson_data["features"]
+    elif isinstance(geojson_data, list):
+        features = geojson_data
+    else:
+        print("Invalid GeoJSON format: expected dict with 'features' or a list.")
+        return
+
     for resolution in resolutions:
         hex_bins = {}
 
-        for feature in geojson_data:
+        for feature in features:
             geometry = feature.get("geometry")
             if not geometry:
                 continue
@@ -218,9 +244,14 @@ def get_normalized_annotations():
     data = request.json
     bounds = data.get('bounds')
     dzi_file = data.get('filename')  # filename is the dzi_file
+    zoom = data.get('zoom', 8)  # Default to 8 if not provided
+    model_name = data.get('modelName')
 
     if not bounds or not dzi_file:
         return jsonify({"error": "Bounds and DZI file are required"}), 400
+
+    # Detect if this is a patch
+    is_patch = dzi_file.endswith('.png') or dzi_file.endswith('.png.dzi')
 
     dzi_file = dzi_file[:-4] if dzi_file.endswith('.dzi') else dzi_file
     x_min, x_max = round(bounds.get('xMin', 6), 6), round(bounds.get('xMax', 6), 6)
@@ -237,6 +268,9 @@ def get_normalized_annotations():
         grouped_annotations = {}
 
         for file_obj in file_list:
+            # Only process files for the selected model
+            if model_name and file_obj.metadata.get("model_name") != model_name:
+                continue
             file_name = file_obj.metadata.get("filename", "Unknown File")
             geojson_data = json.loads(file_obj.read().decode('utf-8'))
 
@@ -250,33 +284,37 @@ def get_normalized_annotations():
 
             filtered_features = []
 
-            for feature in features:
-                geometry = feature.get('geometry', {})
-                coordinates = geometry.get('coordinates', [])
+            # If patch, skip bounds filtering and return all features
+            if is_patch:
+                filtered_features = features
+            else:
+                for feature in features:
+                    geometry = feature.get('geometry', {})
+                    coordinates = geometry.get('coordinates', [])
 
-                # Filter features based on bounds
-                if geometry.get('type') in ['Point', 'MultiPoint']:
-                    filtered_points = [
-                        point for point in coordinates
-                        if x_min <= point[0] <= x_max and y_min <= point[1] <= y_max
-                    ]
-                    if filtered_points:
-                        feature['geometry']['coordinates'] = filtered_points
-                        filtered_features.append(feature)
-
-                elif geometry.get('type') in ['Polygon', 'MultiPolygon']:
-                    filtered_polygons = []
-                    for polygon in coordinates:
-                        filtered_rings = [
-                            [point for point in ring if x_min <= point[0] <= x_max and y_min <= point[1] <= y_max]
-                            for ring in polygon
+                    # Filter features based on bounds
+                    if geometry.get('type') in ['Point', 'MultiPoint']:
+                        filtered_points = [
+                            point for point in coordinates
+                            if x_min <= point[0] <= x_max and y_min <= point[1] <= y_max
                         ]
-                        filtered_rings = [ring for ring in filtered_rings if ring]
-                        if filtered_rings:
-                            filtered_polygons.append(filtered_rings)
-                    if filtered_polygons:
-                        feature['geometry']['coordinates'] = filtered_polygons
-                        filtered_features.append(feature)
+                        if filtered_points:
+                            feature['geometry']['coordinates'] = filtered_points
+                            filtered_features.append(feature)
+
+                    elif geometry.get('type') in ['Polygon', 'MultiPolygon']:
+                        filtered_polygons = []
+                        for polygon in coordinates:
+                            filtered_rings = [
+                                [point for point in ring if x_min <= point[0] <= x_max and y_min <= point[1] <= y_max]
+                                for ring in polygon
+                            ]
+                            filtered_rings = [ring for ring in filtered_rings if ring]
+                            if filtered_rings:
+                                filtered_polygons.append(filtered_rings)
+                        if filtered_polygons:
+                            feature['geometry']['coordinates'] = filtered_polygons
+                            filtered_features.append(feature)
 
             grouped_annotations[file_name] = filtered_features
 
@@ -336,3 +374,21 @@ def get_hex_bins():
         return jsonify({"error": str(e)}), 500
     except Exception as e:
         return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
+
+@geojson_blueprint.route('/annotation_model_mapping', methods=['GET'])
+def annotation_model_mapping():
+    # Build mapping: {image_filename: [model1, model2, ...]}
+    mapping = {}
+    for file_doc in db.fs.files.find({"filename": {"$regex": r".+_.+\\.geojson$"}}):
+        filename = file_doc["filename"]
+        # Extract image and model
+        if "_" in filename:
+            base, model_ext = filename.rsplit("_", 1)
+            model = model_ext.replace(".geojson", "")
+            image = base
+            mapping.setdefault(image, []).append(model)
+    return jsonify(mapping)
+
+@geojson_blueprint.route('/available_models', methods=['GET'])
+def available_models():
+    return jsonify({"models": ["cellvit", "cellvitplus", "hovernet"]})
