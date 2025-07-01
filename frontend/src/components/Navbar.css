@@ -1,53 +1,75 @@
 /* components/Navbar.css */
 .navbar {
-    display: flex;
-    align-items: center;
-    flex-direction: row;
-    background: linear-gradient(145deg, #FFF9F0, #F0ECE3);
-    /* padding: 16px; */
-    color: white;
-    width: 100vw;
-    /* height: 5vh; */
-    color: #B22222;
-    /* border-bottom: 2px solid #ffffff; */
-    border-bottom: 4px solid #ffffff;
-  }
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  background: linear-gradient(145deg, #FFF9F0, #F0ECE3);
+  /* padding: 16px; */
+  color: white;
+  width: 100vw;
+  /* height: 5vh; */
+  color: #B22222;
+  /* border-bottom: 2px solid #ffffff; */
+  border-bottom: 4px solid #ffffff;
+  position: relative;
+  justify-content: flex-start;
+  height: 110px;
+}
 
-  .ashoka-logo-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: row;
-    gap: 38px;
-  }
-  .ashoka-logo {
-    
-    background-color: transparent;
-    height: 100px;
-    width: 250px;
-  }
-  
-  .navbar-brand {
-    font-size: 18px;
-    font-weight: bold;
-  }
-  
-  .navbar-links {
-    list-style: none;
-    display: flex;
-    gap: 1rem;
-  }
-  
-  .navbar-links li {
-    display: inline;
-  }
-  
-  .navbar-links a {
-    color: white;
-    text-decoration: none;
-  }
-  
-  .navbar-links a:hover {
-    text-decoration: underline;
-  }
-  
+.ashoka-logo-container {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  gap: 38px;
+  margin-left: 24px;
+  height: 100%;
+}
+
+.ashoka-logo {
+  background-color: transparent;
+  height: 100px;
+  width: 250px;
+}
+
+.navbar-brand {
+  font-size: 26px;
+  font-weight: bold;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+.navbar-links {
+  list-style: none;
+  display: flex;
+  gap: 1rem;
+}
+
+.navbar-links li {
+  display: inline;
+}
+
+.navbar-links a {
+  color: white;
+  text-decoration: none;
+}
+
+.navbar-links a:hover {
+  text-decoration: underline;
+}
+
+.navbar-logo-right {
+  position: absolute;
+  top: 8px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+}
+
+.ahs-logo {
+  height: 95px;
+  width: auto;
+  object-fit: contain;
+}
