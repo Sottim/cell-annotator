@@ -108,6 +108,11 @@ Alternatively, you can start `both the frontend and backend together` by running
 
 ---
 
+## Application Snapshots
+
+You can find the snapshots of the application in the [`/imgs`](./imgs) directory.
+
+
 ## Notes
 - Make sure MongoDB is running before starting the backend.
 - For large WSIs, ensure you have enough disk space for DZI tiles.
@@ -127,6 +132,12 @@ Alternatively, you can start `both the frontend and backend together` by running
 ---
 
 ## Contact
-For questions or contributions, please contact the Kutum Lab team or open an issue in this repository.
+
+For questions or contributions, please contact the **Augmented Health Systems** team, or personally reach out via GitHub:
+- [Sottim](https://github.com/Sottim)
+- [zahaanshapoorjee](https://github.com/zahaanshapoorjee)
+
+
+Alternatively, feel free to [open an issue](../../issues) in this repository.
 
 #####
