@@ -1,9 +1,11 @@
 .viewer-container {
   text-align: center;
   padding: 20px;
-  background: linear-gradient(145deg, #FFF9F0, #F0ECE3); /* Milk-like gradient */
-  color: #000080; /* Navy Blue text for headings */
-  font-family: 'Arial', sans-serif;
+  background: linear-gradient(145deg, #FFF9F0, #F0ECE3);
+  /* Milk-like gradient */
+  color: #000080;
+  /* Navy Blue text for headings */
+  font-family: 'Segoe UI', 'Arial', sans-serif;
   width: 100%;
   height: 100%;
   display: flex;
@@ -13,28 +15,31 @@
   flex-grow: 1;
 }
 
-
-
 .viewer-header h1 {
-  color: #B22222; /* Dark Red/Crimson color */
+  color: #0d3862ff;
+  font-weight: 700;
+  letter-spacing: 1px;
   margin-bottom: 20px;
 }
 
 .viewer-wrapper {
   display: flex;
-  flex-direction: row; /* Stack the items vertically */
+  flex-direction: row;
+  /* Stack the items vertically */
   align-items: center;
   width: 100%;
   flex-grow: 1;
-
 }
 
 .viewer-box {
   position: relative;
-  width: 100%; /* Fixed size for the viewer box */
+  width: 100%;
+  /* Fixed size for the viewer box */
   height: 500px;
-  margin: 0 auto; /* Center the box */
-  overflow: hidden; /* Hide overflow to prevent scrolling outside the box */
+  margin: 0 auto;
+  /* Center the box */
+  overflow: hidden;
+  /* Hide overflow to prevent scrolling outside the box */
   display: flex;
   flex-direction: row;
   justify-content: center;
@@ -47,59 +52,70 @@
 .wsi-viewer {
   width: 50%;
   height: 98%;
-  border: 2px solid #B22222; /* Dark red border */
+  border: 2px solid #B22222;
+  /* Dark red border */
   border-radius: 10px;
-  
 }
 
 .wsi-viewer canvas {
-  z-index: 10; /* Increase this to ensure it appears above other layers */
+  z-index: 10;
+  /* Increase this to ensure it appears above other layers */
 }
 
 .wsi-viewer canvas {
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 1000;  /* Ensure it's on top */
-  pointer-events: none;  /* Make sure it doesn't block interactions */
+  z-index: 1000;
+  /* Ensure it's on top */
+  pointer-events: none;
+  /* Make sure it doesn't block interactions */
   background: transparent;
   flex-grow: 1;
 }
 
-.dropdown-container
-{
-  margin: 16px;
+.dropdown-container {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-family: 'Courier New', Courier, monospace;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 16px;
+  flex-wrap: nowrap;
 }
 
+.dropdown-container label,
+.dropdown-container select {
+  white-space: nowrap;
+}
 
-.openseadragon-canvas
-{
+.dropdown-container label {
+  color: #0d3862ff;
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+.openseadragon-canvas {
   width: 50%;
 }
+
 .annotation-legend {
   position: absolute;
   top: 10px;
-  right:34%;
-  background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent white background */
+  right: 34%;
+  background-color: rgba(255, 255, 255, 0.8);
+  /* Semi-transparent white background */
   padding: 10px;
   border-radius: 5px;
-  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1); /* Subtle shadow for better visibility */
-  font-size: 12px; /* Adjust font size */
+  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+  /* Subtle shadow for better visibility */
+  font-size: 12px;
+  /* Adjust font size */
   z-index: 1001
-  
 }
 
 /* .blur {
   filter: blur(5px); 
   transition: filter 0.3s ease-out;
 }  */
-
-
-
 
 .loading-spinner {
   position: absolute;
@@ -116,16 +132,18 @@
   display: none;
 }
 
-
-
-.loading-overlay
-{
+.loading-overlay {
   z-index: 1002;
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .annotation-legend ul {
@@ -150,18 +168,18 @@
 }
 
 .upload-btn {
-  background-color: #B22222; /* Dark Red/Crimson */
-  color: white;
+  background-color: #0d3862ff;
+  color: #fff;
   border: none;
   padding: 10px 20px;
   font-size: 16px;
   cursor: pointer;
   border-radius: 5px;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.3s;
 }
 
 .upload-btn:hover {
-  background-color: #800000; /* Darker red on hover */
+  background-color: #c4122fff;
 }
 
 input[type="file"] {
@@ -171,7 +189,8 @@ input[type="file"] {
 /* Horizontal Zoom Slider */
 .zoom-slider-container {
   margin-top: 20px;
-  width: 50%; /* Matches viewer box width */
+  width: 50%;
+  /* Matches viewer box width */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -180,11 +199,15 @@ input[type="file"] {
 }
 
 .zoom-slider {
-  width: 100%; /* Horizontal width */
-  height: 25px; /* Adjusted height for horizontal slider */
-  background-color: #FFF9F0; /* Matches background gradient */
+  width: 100%;
+  /* Horizontal width */
+  height: 25px;
+  /* Adjusted height for horizontal slider */
+  background-color: #FFF9F0;
+  /* Matches background gradient */
   border-radius: 10px;
-  border: 2px solid #B22222; /* Matches viewer border */
+  border: 2px solid #B22222;
+  /* Matches viewer border */
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
@@ -192,9 +215,11 @@ input[type="file"] {
   opacity: 0.7;
   transition: opacity 0.2s;
 }
+
 .zoom-slider:hover {
   opacity: 1;
 }
+
 .zoom-levels {
   display: flex;
   justify-content: space-between;
@@ -213,7 +238,8 @@ input[type="file"] {
   -webkit-appearance: none;
   width: 20px;
   height: 20px;
-  background-color: #B22222; /* Crimson slider thumb */
+  background-color: #B22222;
+  /* Crimson slider thumb */
   border-radius: 50%;
   cursor: pointer;
 }
@@ -228,7 +254,8 @@ input[type="file"] {
 
 .zoom-slider:hover::-webkit-slider-thumb,
 .zoom-slider:hover::-moz-range-thumb {
-  background-color: #800000; /* Darker red on hover */
+  background-color: #800000;
+  /* Darker red on hover */
 }
 
 .annotation-toggles {
@@ -237,9 +264,29 @@ input[type="file"] {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  border: 2px solid #B22222; /* Dark red border */
+  border: 2px solid #0d3862ff;
   border-radius: 10px;
   width: 15%;
   height: 99%;
-  
+  background: #f7faff;
+}
+
+.annotation-toggles h3 {
+  color: #0d3862ff;
+  font-weight: 600;
+}
+
+.annotation-toggles .current-status,
+.annotation-toggles .error-status {
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 8px 0;
+}
+
+.annotation-toggles .current-status {
+  color: #0d3862ff;
+}
+
+.annotation-toggles .error-status {
+  color: #c4122fff;
 }

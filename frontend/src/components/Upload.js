@@ -5,6 +5,7 @@ import axios from 'axios';
 
 const Upload = ({ onSuccess }) => {
   const [file, setFile] = useState(null);
+  const [uploadType, setUploadType] = useState('wsi'); // 'wsi' or 'patch'
 
   const handleFileChange = (event) => {
     setFile(event.target.files[0]);
@@ -19,8 +20,12 @@ const Upload = ({ onSuccess }) => {
     const formData = new FormData();
     formData.append('file', file);
 
+    const endpoint = uploadType === 'patch'
+      ? `${process.env.REACT_APP_BACKEND_URL}/upload_patch`
+      : `${process.env.REACT_APP_BACKEND_URL}/upload`;
+
     try {
-      const response = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/upload`, formData, {
+      const response = await axios.post(endpoint, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -38,6 +43,26 @@ const Upload = ({ onSuccess }) => {
 
   return (
     <div>
+      <div style={{ marginBottom: '8px' }}>
+        <label>
+          <input
+            type="radio"
+            value="wsi"
+            checked={uploadType === 'wsi'}
+            onChange={() => setUploadType('wsi')}
+          />
+          Upload WSI
+        </label>
+        <label style={{ marginLeft: '16px' }}>
+          <input
+            type="radio"
+            value="patch"
+            checked={uploadType === 'patch'}
+            onChange={() => setUploadType('patch')}
+          />
+          Upload Patch
+        </label>
+      </div>
       <input type="file" onChange={handleFileChange} />
       <button className='upload-btn' onClick={handleUpload}>Upload</button>
     </div>

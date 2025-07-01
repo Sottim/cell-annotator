@@ -13,7 +13,7 @@ const App = () => {
     setDziUrl(url);
     setFilename(dziPath.split('.dzi')[0]); // Extract filename without .dzi extension
   };
-  
+
 
   return (
     <div className='app-container'>
