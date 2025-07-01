@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Cell Annotator is a web-based tool for visualizing, annotating, and analyzing whole slide images (WSIs) and image patches in pathology. It supports multi-model cell annotation overlays, making it a powerful platform for digital pathology research and education.
+Cell Annotator is a web-based tool for visualizing, annotating, and analyzing whole slide images (WSIs) and image patches in pathology. It supports multi-model cell annotation overlays for histopathology research.
 
 ---
 
